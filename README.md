@@ -18,10 +18,9 @@ Demos of visual apps built with RepoBird using Three.js.
 │       ├── fonts/
 │       └── models/
 ├── tests/
-│   ├── runner.js        # Test setup and execution script
 │   └── *.test.js        # Individual test files (e.g., spinning-cube.test.js)
 ├── README.md
-└── package.json         # (Not used in CDN setup)
+└── package.json         # Project configuration and dependencies
 ```
 
 ## Running Locally
