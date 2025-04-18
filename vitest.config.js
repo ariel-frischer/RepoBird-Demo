@@ -13,7 +13,7 @@ export default defineConfig({
       // setup: './tests/setup.js',
     },
     // Include test files matching the pattern
-    include: ['tests/**/*.test.js'],
+    include: ['tests/**/*.test.js', 'src/components/**/*.test.js'], // Corrected include pattern
     // Optional: setup files to run before each test file
     // setupFiles: ['./tests/setup.js'],
     // Optional: global variables for tests
