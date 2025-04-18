@@ -1,24 +1,42 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path'; // Import path module
 
 export default defineConfig({
   test: {
-    // Run tests in a browser environment using Playwright
+    // Browser testing configuration
     browser: {
       enabled: true,
-      name: 'chromium', // Can be 'chromium', 'firefox', 'webkit'
-      provider: 'playwright', // or 'webdriverio'
-      // Optional: run tests in headless mode
+      name: 'chromium',
+      provider: 'playwright',
       headless: true,
-      // Optional: setup file for browser environment
-      // setup: './tests/setup.js',
     },
-    // Include test files matching the pattern
-    include: ['tests/**/*.test.js'],
-    // Optional: setup files to run before each test file
-    // setupFiles: ['./tests/setup.js'],
-    // Optional: global variables for tests
-    // globals: true, // If you want Vitest globals like describe, it, expect available without importing
-    environment: 'jsdom', // Default environment for tests not running in browser mode
-    // reporters: ['default', 'html'], // Optional: configure reporters
+    include: ['tests/**/*.test.js', 'src/**/*.test.js'],
+    // Default environment (jsdom), browser config overrides for test:browser script
+    environment: 'jsdom',
+    // reporters: ['default', 'html'],
   },
+  // Keep optimizer settings for browser mode
+  deps: {
+    optimizer: {
+      web: {
+        enabled: true,
+        include: ['three', 'three/addons/**'] // Keep optimizing three itself
+      },
+    },
+  },
+  // Add resolve alias for mocking specific addon modules
+  resolve: {
+    alias: {
+      // Redirect imports of OrbitControls to our mock file
+      'three/addons/controls/OrbitControls.js':
+        path.resolve(__dirname, './tests/mocks/OrbitControls.js'),
+      // Redirect imports of GLTFLoader to our mock file
+      'three/addons/loaders/GLTFLoader.js':
+        path.resolve(__dirname, './tests/mocks/GLTFLoader.js'),
+      // If other addons were needed, they could be added here
+      // Example:
+      // 'three/addons/postprocessing/EffectComposer.js':
+      //   path.resolve(__dirname, './tests/mocks/EffectComposer.js'),
+    }
+  }
 });
