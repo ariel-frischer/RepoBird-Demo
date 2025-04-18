@@ -109,8 +109,8 @@ describe('Car Viewer Component', () => {
   });
 
    it('should call cancelAnimationFrame during cleanup', () => {
-     const rafMock = global.requestAnimationFrame as vi.Mock;
-     const cafMock = global.cancelAnimationFrame as vi.Mock;
+     const rafMock = global.requestAnimationFrame; // CORRECTED LINE
+     const cafMock = global.cancelAnimationFrame; // CORRECTED LINE
      rafMock.mockReturnValue(123); // Return a mock ID
 
      cleanup = init(container);

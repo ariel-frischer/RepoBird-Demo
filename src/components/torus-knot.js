@@ -52,7 +52,8 @@ function setupScene(container) {
 }
 
 function onWindowResize(container) {
-    if (!camera || !renderer) return;
+    // Add checks for camera, renderer, and container
+    if (!camera || !renderer || !container) return;
     camera.aspect = container.clientWidth / container.clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -95,7 +96,9 @@ export function init(container) {
     // Return the cleanup function specific to this instance
     return function cleanup() {
         console.log("Cleaning up torus knot component...");
-        cancelAnimationFrame(animationFrameId);
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
 
         if (resizeHandler) {
             window.removeEventListener('resize', resizeHandler);
@@ -111,8 +114,8 @@ export function init(container) {
             if (mesh.geometry) mesh.geometry.dispose();
             if (mesh.material) {
                 if (Array.isArray(mesh.material)) {
-                    mesh.material.forEach(mat => mat.dispose());
-                } else {
+                    mesh.material.forEach(mat => { if (mat && typeof mat.dispose === 'function') mat.dispose(); });
+                } else if (typeof mesh.material.dispose === 'function') {
                     mesh.material.dispose();
                 }
             }
@@ -125,15 +128,16 @@ export function init(container) {
         ambientLight = null;
         directionalLight = null;
 
+        // Check renderer and domElement before removing and disposing
         if (renderer) {
             if (renderer.domElement && renderer.domElement.parentNode) {
                  renderer.domElement.parentNode.removeChild(renderer.domElement);
             }
-            renderer.dispose();
+            renderer.dispose(); // Dispose after removing from DOM
             renderer = null;
         }
 
-        scene = null;
+        scene = null; // Scene should be cleared of objects before nullifying
         camera = null;
         animationFrameId = null;
         console.log("Torus knot cleanup finished.");

@@ -50,6 +50,7 @@ function setupScene(container) {
 }
 
 function onWindowResize(container) {
+    // Add checks for container, renderer, and camera
     if (!renderer || !camera || !container) return;
     // Recalculate aspect ratio based on current container size
     const aspect = container.clientWidth / container.clientHeight;
@@ -86,7 +87,9 @@ export function init(container) {
     // Return the cleanup function specific to this instance
     return function specificCleanup() {
        console.log("Executing specific cleanup for spinning cube...");
-       cancelAnimationFrame(animationFrameId);
+       if (animationFrameId) {
+           cancelAnimationFrame(animationFrameId);
+       }
        animationFrameId = null;
 
        if(resizeHandler) {
@@ -99,23 +102,9 @@ export function init(container) {
            controls = null;
        }
 
-       if (renderer) {
-           renderer.dispose();
-           if (renderer.domElement && renderer.domElement.parentNode) {
-                // Check parentNode again before removing
-                if (renderer.domElement.parentNode === container) {
-                    try {
-                       container.removeChild(renderer.domElement);
-                    } catch (e) {
-                        console.error("Error removing renderer dom element:", e);
-                    }
-                }
-           }
-           renderer = null;
-       }
-
        if (scene) {
            scene.traverse(object => {
+               if (!object) return;
                if (object instanceof THREE.Mesh) {
                    if (object.geometry) object.geometry.dispose();
                    if (object.material) {
@@ -135,6 +124,21 @@ export function init(container) {
                }
            });
            scene = null;
+       }
+
+       // Check renderer and domElement before removing and disposing
+       if (renderer) {
+           // Remove canvas from DOM first
+           if (renderer.domElement && renderer.domElement.parentNode === container) { // Check parentNode explicitly
+                try {
+                   container.removeChild(renderer.domElement);
+                } catch (e) {
+                    console.error("Error removing renderer dom element:", e);
+                }
+           }
+           // Then dispose renderer
+           renderer.dispose();
+           renderer = null; // Nullify after dispose
        }
 
        camera = null;

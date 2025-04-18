@@ -60,6 +60,8 @@ export function init(container) {
 
   // --- Event Listeners ---
   function onMouseMove(event) {
+      if (!renderer || !camera || !planeMesh || !raycaster || !mouse) return; // Add checks
+
       // Calculate mouse position in normalized device coordinates (-1 to +1)
       const rect = renderer.domElement.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -103,17 +105,23 @@ export function init(container) {
   }
 
   function onWindowResize() {
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
+      if (camera && renderer && container) {
+          camera.aspect = container.clientWidth / container.clientHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(container.clientWidth, container.clientHeight);
+      }
   }
 
-  renderer.domElement.addEventListener('mousemove', onMouseMove);
+  if (renderer && renderer.domElement) { // Check before adding listener
+    renderer.domElement.addEventListener('mousemove', onMouseMove);
+  }
   window.addEventListener('resize', onWindowResize);
 
   // --- Animation Loop ---
   function animate() {
       animationFrameId = requestAnimationFrame(animate);
+      if (!planeMesh || !renderer || !scene || !camera || !controls) return; // Add checks
+
       const delta = clock.getDelta(); // Time elapsed since last frame
 
       // --- Gradual Decay of Deformation ---
@@ -121,21 +129,23 @@ export function init(container) {
       let needsUpdate = false;
       const decayFactor = 1.0 - Math.min(delta * 5.0, 1.0); // Adjust decay speed (e.g., 5 times per second)
 
-      for (let i = 0; i < positionAttribute.count; i++) {
-          const currentZ = positionAttribute.getZ(i);
-          const originalZ = originalPositions.getZ(i);
-          if (Math.abs(currentZ - originalZ) > 0.01) { // Only decay if significantly displaced
-             positionAttribute.setZ(i, originalZ + (currentZ - originalZ) * decayFactor);
-             needsUpdate = true;
-          } else if (currentZ !== originalZ) {
-             // Snap back if very close to avoid tiny perpetual oscillations
-             positionAttribute.setZ(i, originalZ);
-             needsUpdate = true;
+      if (positionAttribute && originalPositions) { // Add checks
+          for (let i = 0; i < positionAttribute.count; i++) {
+              const currentZ = positionAttribute.getZ(i);
+              const originalZ = originalPositions.getZ(i);
+              if (Math.abs(currentZ - originalZ) > 0.01) { // Only decay if significantly displaced
+                 positionAttribute.setZ(i, originalZ + (currentZ - originalZ) * decayFactor);
+                 needsUpdate = true;
+              } else if (currentZ !== originalZ) {
+                 // Snap back if very close to avoid tiny perpetual oscillations
+                 positionAttribute.setZ(i, originalZ);
+                 needsUpdate = true;
+              }
           }
-      }
 
-      if (needsUpdate) {
-          positionAttribute.needsUpdate = true;
+          if (needsUpdate) {
+              positionAttribute.needsUpdate = true;
+          }
       }
 
       controls.update(delta); // Update controls if enableDamping is true
@@ -149,23 +159,25 @@ export function init(container) {
       cancelAnimationFrame(animationFrameId);
 
       // Remove event listeners
-      renderer.domElement.removeEventListener('mousemove', onMouseMove);
+      if (renderer && renderer.domElement) { // Check before removing listener
+        renderer.domElement.removeEventListener('mousemove', onMouseMove);
+      }
       window.removeEventListener('resize', onWindowResize);
 
       // Dispose Three.js objects
-      controls.dispose();
-      geometry.dispose();
-      material.dispose();
+      if (controls) controls.dispose();
+      if (geometry) geometry.dispose();
+      if (material) material.dispose();
       // Dispose any textures if they were used
       // texture.dispose();
 
-      renderer.dispose();
-
-      // Remove canvas from DOM
-      if (renderer.domElement.parentNode === container) {
+      // Check renderer and domElement before removing and disposing
+      if (renderer && renderer.domElement && renderer.domElement.parentNode === container) {
          container.removeChild(renderer.domElement);
       }
-
+      if (renderer) { // Check renderer before disposing
+          renderer.dispose();
+      }
 
       // Nullify references to help garbage collection
       scene = null;

@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export function init(container) {
     let scene, camera, renderer, controls, model, animationFrameId;
+    let ambientLight, directionalLight; // Make lights accessible in cleanup
 
     // Scene setup
     scene = new THREE.Scene();
@@ -29,10 +30,10 @@ export function init(container) {
     controls.maxPolarAngle = Math.PI / 2;
 
     // Lighting setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Softer ambient light
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Softer ambient light
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Stronger directional light
+    directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Stronger directional light
     directionalLight.position.set(5, 10, 7.5);
     scene.add(directionalLight);
 
@@ -44,6 +45,10 @@ export function init(container) {
         'models/car.gltf.txt', // Path relative to the HTML file or served root
         function (gltf) {
             model = gltf.scene;
+            if (!model) {
+              console.error("GLTF loaded, but scene is null.");
+              return;
+            }
 
             // Center and scale the model
             const box = new THREE.Box3().setFromObject(model);
@@ -78,12 +83,16 @@ export function init(container) {
     // Animation loop
     function animate() {
         animationFrameId = requestAnimationFrame(animate);
+        // Add checks before rendering/updating
+        if (!controls || !renderer || !scene || !camera) return;
         controls.update(); // Only required if enableDamping or autoRotate are set to true
         renderer.render(scene, camera);
     }
 
     // Handle window resize
     function onWindowResize() {
+        // Add checks before resizing
+        if (!camera || !renderer || !container) return;
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
@@ -103,18 +112,20 @@ export function init(container) {
         if (controls) {
             controls.dispose();
         }
-        if (renderer) {
+
+        if (scene) { // Check scene exists
             // Dispose geometries and materials in the loaded model
             if (model) {
                 model.traverse((object) => {
+                    if (!object) return;
                     if (object.isMesh) {
                         if (object.geometry) {
                             object.geometry.dispose();
                         }
                         if (object.material) {
                             if (Array.isArray(object.material)) {
-                                object.material.forEach(material => material.dispose());
-                            } else {
+                                object.material.forEach(material => { if (material && typeof material.dispose === 'function') material.dispose(); });
+                            } else if (typeof object.material.dispose === 'function') {
                                 object.material.dispose();
                             }
                         }
@@ -123,21 +134,31 @@ export function init(container) {
                 scene.remove(model); // Remove model from scene
             }
 
-             // Dispose scene lights etc if needed (though often shared)
-            scene.remove(ambientLight);
-            scene.remove(directionalLight);
-
-            renderer.dispose();
-            if (renderer.domElement.parentNode === container) {
-                 container.removeChild(renderer.domElement);
-            }
+             // Dispose scene lights etc if needed
+             if (ambientLight) scene.remove(ambientLight);
+             if (directionalLight) scene.remove(directionalLight);
         }
 
-        // Optional: Clear scene children more broadly if necessary
-        // while(scene.children.length > 0){
-        //     scene.remove(scene.children[0]);
-        // }
+        // Check renderer and domElement before removing and disposing
+        if (renderer) {
+            // Remove from DOM first
+            if (renderer.domElement && renderer.domElement.parentNode === container) { // Check parentNode explicitly
+                 container.removeChild(renderer.domElement);
+            }
+            // Then dispose
+            renderer.dispose();
+        }
 
+        // Nullify references
+        scene = null;
+        camera = null;
+        renderer = null;
+        controls = null;
+        model = null;
+        animationFrameId = null;
+        ambientLight = null;
+        directionalLight = null;
+        console.log('Car viewer cleanup complete.');
     }
 
     return cleanup;

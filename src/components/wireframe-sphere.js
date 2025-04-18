@@ -82,36 +82,38 @@ function specificCleanup() {
     if (controls) {
         controls.dispose();
     }
-    if (renderer) {
-        // Traverse scene to dispose geometry and materials
-        if (scene) {
-             scene.traverse((object) => {
-                if (object.isMesh) {
-                    if (object.geometry) {
-                        object.geometry.dispose();
-                        // console.log('Disposed geometry for:', object.name || object.uuid);
-                    }
-                    if (object.material) {
-                        // If material is an array, dispose each element
-                        if (Array.isArray(object.material)) {
-                            object.material.forEach(material => material.dispose());
-                        } else {
-                            object.material.dispose();
-                        }
-                        // console.log('Disposed material for:', object.name || object.uuid);
-                    }
-                }
-            });
-        }
-        // Dispose renderer itself
-        renderer.dispose();
-        // console.log('Disposed renderer');
 
-        // Remove canvas from DOM
+    // Traverse scene to dispose geometry and materials
+    if (scene) {
+         scene.traverse((object) => {
+            if (object.isMesh) {
+                if (object.geometry) {
+                    object.geometry.dispose();
+                    // console.log('Disposed geometry for:', object.name || object.uuid);
+                }
+                if (object.material) {
+                    // If material is an array, dispose each element
+                    if (Array.isArray(object.material)) {
+                        object.material.forEach(material => material.dispose());
+                    } else {
+                        object.material.dispose();
+                    }
+                    // console.log('Disposed material for:', object.name || object.uuid);
+                }
+            }
+        });
+    }
+
+    // Dispose renderer itself and remove DOM element
+    if (renderer) { // Check renderer before disposing and accessing domElement
+        // Remove canvas from DOM first
         if (renderer.domElement && renderer.domElement.parentNode) {
             renderer.domElement.parentNode.removeChild(renderer.domElement);
             // console.log('Removed renderer DOM element');
         }
+        // Then dispose renderer
+        renderer.dispose();
+        // console.log('Disposed renderer');
     }
 
     // Clear references

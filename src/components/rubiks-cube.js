@@ -102,6 +102,8 @@ function init(container) {
 
     // Resize listener
     const onWindowResize = () => {
+        // Add checks for camera, renderer, and container
+        if (!camera || !renderer || !container) return;
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
@@ -112,6 +114,8 @@ function init(container) {
     // Animation Loop
     function animate() {
         animationFrameId = requestAnimationFrame(animate);
+        // Add checks before rendering
+        if (!controls || !renderer || !scene || !camera) return;
         controls.update(); // required if controls.enableDamping or controls.autoRotate are set to true
         renderer.render(scene, camera);
     }
@@ -120,47 +124,55 @@ function init(container) {
     // Return Cleanup Function
     const cleanup = () => {
         console.log("Cleaning up Rubik's Cube demo...");
-        cancelAnimationFrame(animationFrameId);
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
         window.removeEventListener('resize', onWindowResize); // Remove resize listener
 
         if (controls) {
             controls.dispose();
         }
 
-        if (cubeGroup) {
-            cubeGroup.children.forEach(mesh => {
-                if (mesh.geometry) {
-                    mesh.geometry.dispose();
-                }
-                if (mesh.material) {
-                    if (Array.isArray(mesh.material)) {
-                        mesh.material.forEach(mat => mat.dispose());
-                    } else {
-                        mesh.material.dispose();
+        if (scene) { // Check scene exists
+            if (cubeGroup) {
+                cubeGroup.children.forEach(mesh => {
+                    if (mesh.geometry) {
+                        mesh.geometry.dispose();
+                    }
+                    if (mesh.material) {
+                        if (Array.isArray(mesh.material)) {
+                            mesh.material.forEach(mat => { if (mat && typeof mat.dispose === 'function') mat.dispose(); });
+                        } else if (typeof mesh.material.dispose === 'function') {
+                            mesh.material.dispose();
+                        }
+                    }
+                });
+                scene.remove(cubeGroup); // Remove group from scene
+            }
+
+            // Dispose other scene objects like lights and plane
+            scene.traverse(object => {
+                 if (!object) return; // Add null check
+                 if (object.geometry) object.geometry.dispose();
+                 if (object.material) {
+                    if (Array.isArray(object.material)) {
+                        object.material.forEach(material => { if (material && typeof material.dispose === 'function') material.dispose(); });
+                    } else if (typeof object.material.dispose === 'function') {
+                        object.material.dispose();
                     }
                 }
             });
-            scene.remove(cubeGroup);
         }
-        
-        // Dispose other scene objects like lights and plane
-        scene.traverse(object => {
-             if (object.geometry) object.geometry.dispose();
-             if (object.material) {
-                if (Array.isArray(object.material)) {
-                    object.material.forEach(material => material.dispose());
-                } else {
-                    object.material.dispose();
-                }
-            }
-        });
 
 
+        // Check renderer and domElement before removing and disposing
         if (renderer) {
-            renderer.dispose();
-            if (renderer.domElement && container.contains(renderer.domElement)) {
+            // Remove from DOM first
+            if (renderer.domElement && renderer.domElement.parentNode === container) { // Check parentNode explicitly
                  container.removeChild(renderer.domElement);
             }
+            // Then dispose
+            renderer.dispose();
         }
 
         // Clear references

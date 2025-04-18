@@ -84,14 +84,18 @@ export function init(container) {
         }
 
         // Render the scene
-        renderer.render(scene, camera);
+        if (renderer) {
+            renderer.render(scene, camera);
+        }
     }
 
     // Handle window resize
     function onWindowResize() {
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
+        if (camera && renderer && container) {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
     }
     window.addEventListener('resize', onWindowResize);
 
@@ -107,22 +111,38 @@ export function init(container) {
         window.removeEventListener('resize', onWindowResize);
 
         // Dispose Three.js objects
-        scene.remove(ball);
-        ball.geometry.dispose();
-        ball.material.dispose();
-
-        scene.remove(floor);
-        floor.geometry.dispose();
-        floor.material.dispose();
-
-        scene.remove(ambientLight);
-        scene.remove(directionalLight);
-
-        if (renderer.domElement.parentElement) {
-            container.removeChild(renderer.domElement);
+        if (scene && ball) {
+            scene.remove(ball);
         }
-        renderer.dispose();
+        if (ball && ball.geometry) ball.geometry.dispose();
+        if (ball && ball.material) ball.material.dispose();
+
+        if (scene && floor) {
+            scene.remove(floor);
+        }
+        if (floor && floor.geometry) floor.geometry.dispose();
+        if (floor && floor.material) floor.material.dispose();
+
+        if (scene && ambientLight) scene.remove(ambientLight);
+        if (scene && directionalLight) scene.remove(directionalLight);
+
+        // Check renderer and domElement before removing and disposing
+        if (renderer && renderer.domElement && renderer.domElement.parentElement) {
+            // Assuming container is always valid if renderer.domElement.parentElement exists
+            renderer.domElement.parentElement.removeChild(renderer.domElement);
+        }
+        if (renderer) {
+            renderer.dispose();
+        }
         console.log('Bouncing ball demo cleaned up');
+
+        // Nullify references
+        scene = null;
+        camera = null;
+        renderer = null;
+        clock = null;
+        ball = null;
+        floor = null;
     }
 
     console.log('Bouncing ball demo initialized');
