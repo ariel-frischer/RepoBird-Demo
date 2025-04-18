@@ -12,6 +12,7 @@ const demos = {
     'spinning-cube': () => import('./components/spinning-cube.js'),
     'bouncing-ball': () => import('./components/bouncing-ball.js'),
     '3d-text': () => import('./components/3d-text.js'),
+    'rubiks-cube': () => import('./components/rubiks-cube.js'),
 };
 
 async function loadDemo(demoName) {
