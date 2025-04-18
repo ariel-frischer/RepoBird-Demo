@@ -17,6 +17,7 @@ const demos = {
     'solar-system': () => import('./components/solar-system.js'),
     'particle-emitter': () => import('./components/particle-emitter.js'),
     'torus-knot': () => import('./components/torus-knot.js'), // Added new demo
+    'interactive-plane': () => import('./components/interactive-plane.js'),
 };
 
 async function loadDemo(demoKey) {
