@@ -14,6 +14,7 @@ const demos = {
     '3d-text': () => import('./components/3d-text.js'),
     'rubiks-cube': () => import('./components/rubiks-cube.js'),
     'solar-system': () => import('./components/solar-system.js'),
+    'particle-emitter': () => import('./components/particle-emitter.js'),
 };
 
 async function loadDemo(demoName) {
