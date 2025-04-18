@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+'''import * as THREE from 'three';
 
 console.log('Three.js version:', THREE.REVISION);
 
@@ -16,6 +16,7 @@ const demos = {
     'rubiks-cube': () => import('./components/rubiks-cube.js'),
     'solar-system': () => import('./components/solar-system.js'),
     'particle-emitter': () => import('./components/particle-emitter.js'),
+    'torus-knot': () => import('./components/torus-knot.js'), // Added new demo
 };
 
 async function loadDemo(demoKey) {
@@ -124,7 +125,7 @@ function populateSidebar(demosData) {
     console.log('Sidebar populated with demos.');
 
     // Return the list element for potential initial load targeting
-    return ul; 
+    return ul;
 }
 
 // --- Initialization ---
@@ -154,3 +155,4 @@ if (firstDemoKey && demoListElement) {
 }
 
 console.log('Application initialized.');
+'''
