@@ -11,6 +11,7 @@ let currentCleanup = null; // To store the cleanup function of the active demo
 const demos = {
     'spinning-cube': () => import('./components/spinning-cube.js'),
     'bouncing-ball': () => import('./components/bouncing-ball.js'),
+    '3d-text': () => import('./components/3d-text.js'),
 };
 
 async function loadDemo(demoName) {
