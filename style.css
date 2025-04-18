@@ -1,0 +1,34 @@
+body {
+    margin: 0;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column; /* Stack selector above container */
+    height: 100vh;
+}
+
+#demo-selector {
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+    text-align: center;
+}
+
+#demo-select {
+    padding: 5px;
+    font-size: 1em;
+}
+
+#app-container {
+    flex-grow: 1; /* Allow container to fill remaining space */
+    position: relative; /* Needed for potential absolute positioning within demos */
+    display: flex; /* Center placeholder text */
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #ccc; /* Optional: for visualization */
+    overflow: hidden; /* Prevent scrollbars if canvas is larger */
+}
+
+#app-container p {
+    font-size: 1.2em;
+    color: #666;
+}
