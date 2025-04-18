@@ -18,6 +18,7 @@ const demos = {
     'particle-emitter': () => import('./components/particle-emitter.js'),
     'torus-knot': () => import('./components/torus-knot.js'), // Added new demo
     'interactive-plane': () => import('./components/interactive-plane.js'),
+    'car-viewer': () => import('./components/car-viewer.js')
 };
 
 async function loadDemo(demoKey) {
