@@ -2,6 +2,11 @@
 
 Demos of visual apps built with RepoBird using Three.js.
 
+## Developed with RepoBird.ai
+
+This repository showcases visual applications primarily implemented by the [RepoBird.ai](https://repobird.ai/) agent. You can explore the development process and see the agent's work by reviewing the closed [Issues](https://github.com/ariel-frischer/RepoBird-Demo/issues?q=is%3Aissue+is%3Aclosed) and [Pull Requests](https://github.com/ariel-frischer/RepoBird-Demo/pulls?q=is%3Apr+is%3Aclosed) for this project.
+
+
 ## Project Structure
 
 ```
