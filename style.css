@@ -1,34 +1,96 @@
-body {
+html, body {
     margin: 0;
+    padding: 0;
+    height: 100%;
     font-family: sans-serif;
+    background-color: #1a1a1a; /* Dark background for the page */
+    color: #f0f0f0; /* Light text for the page */
+}
+
+body {
     display: flex;
-    flex-direction: column; /* Stack selector above container */
-    height: 100vh;
+    flex-direction: column;
+    overflow: hidden; /* Prevent body scrollbars */
 }
 
-#demo-selector {
-    padding: 10px;
-    background-color: #f0f0f0;
-    border-bottom: 1px solid #ccc;
-    text-align: center;
+header {
+    background-color: #222; /* Dark header */
+    color: #f0f0f0; /* Light text */
+    padding: 10px 20px;
+    border-bottom: 1px solid #444;
+    flex-shrink: 0; /* Prevent header from shrinking */
 }
 
-#demo-select {
-    padding: 5px;
-    font-size: 1em;
+header h1 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.container {
+    display: flex;
+    flex-grow: 1; /* Take remaining vertical space */
+    height: calc(100% - 51px); /* Adjust based on header height + border */
+    overflow: hidden; /* Prevent container scrollbars */
+}
+
+#sidebar {
+    width: 200px;
+    background-color: #333; /* Slightly lighter dark */
+    color: #f0f0f0;
+    padding: 15px;
+    overflow-y: auto; /* Enable vertical scrollbar if needed */
+    flex-shrink: 0; /* Prevent sidebar from shrinking */
+    height: 100%; /* Fill container height */
+    box-sizing: border-box; /* Include padding in width/height */
+}
+
+#sidebar h2 {
+    margin-top: 0;
+    font-size: 1.2em;
+    border-bottom: 1px solid #555;
+    padding-bottom: 5px;
+}
+
+#sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#sidebar li {
+    padding: 8px 0;
+    cursor: pointer;
+    border-bottom: 1px solid #444;
+}
+
+#sidebar li:last-child {
+    border-bottom: none;
+}
+
+#sidebar li:hover {
+    background-color: #444;
+}
+
+#sidebar li.active {
+    background-color: #555;
+    font-weight: bold;
 }
 
 #app-container {
-    flex-grow: 1; /* Allow container to fill remaining space */
-    position: relative; /* Needed for potential absolute positioning within demos */
+    flex-grow: 1; /* Take remaining horizontal space */
+    position: relative; /* For canvas positioning */
     display: flex; /* Center placeholder text */
     justify-content: center;
     align-items: center;
-    border: 1px solid #ccc; /* Optional: for visualization */
     overflow: hidden; /* Prevent scrollbars if canvas is larger */
+    height: 100%; /* Fill container height */
+}
+
+#app-container canvas {
+    display: block; /* Prevent extra space below canvas */
 }
 
 #app-container p {
     font-size: 1.2em;
-    color: #666;
+    color: #aaa;
 }

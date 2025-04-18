@@ -7,6 +7,7 @@ export function init(container) {
 
     // Scene setup
     scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a1a);
     clock = new THREE.Clock();
 
     // Camera setup

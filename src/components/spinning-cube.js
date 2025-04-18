@@ -8,7 +8,7 @@ let resizeHandler = null; // Keep track of the resize handler for proper removal
 function setupScene(container) {
     // Scene
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xeeeeee);
+    scene.background = new THREE.Color(0x1a1a1a);
 
     // Camera
     const aspect = container.clientWidth / container.clientHeight;

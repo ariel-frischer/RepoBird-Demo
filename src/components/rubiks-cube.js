@@ -44,7 +44,7 @@ function createCubie(x, y, z) {
 function init(container) {
     // Scene Setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xaaaaaa);
+    scene.background = new THREE.Color(0x1a1a1a);
 
     camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
     camera.position.set(0, 5, 5); // Adjusted camera position for better initial view

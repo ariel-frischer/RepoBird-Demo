@@ -11,7 +11,7 @@ export function init(container) {
 
     // Scene setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+    scene.background = new THREE.Color(0x1a1a1a);
 
     // Camera setup
     camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
