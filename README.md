@@ -35,13 +35,28 @@ Since this project uses ES Modules (`import` statements in JavaScript), you need
     ```
     (If `python3` doesn't work, try `python -m http.server`)
 3.  **Open your web browser** and go to `http://localhost:8000` (or the address provided by the server).
-4.  Use the dropdown menu to select and view the demos.
+4.  Use the sidebar menu to select and view the demos.
 
 ## Running Tests
 
-This project uses Mocha and Chai for browser-based testing. The tests verify the functionality of individual components.
+This project uses [Vitest](https://vitest.dev/) with `@vitest/browser` and Playwright for testing the components in a real browser environment.
 
-1.  **Ensure you are serving the project directory** using a local web server (see "Running Locally" instructions above).
-2.  **Open your web browser** and navigate to the main page (e.g., `http://localhost:8000`).
-3.  The Mocha test results will be displayed directly on the page, usually below the main application container. Look for the Mocha reporter interface.
-4.  Any test failures will be highlighted in red. All passing tests will be shown in green.
+1.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+2.  **Run tests:**
+    *   To run tests in a headless browser (Chromium by default, configured in `vitest.config.js`):
+        ```bash
+        npm run test:browser
+        ```
+    *   To run tests using Node.js/JSDOM (if applicable for non-browser tests):
+        ```bash
+        npm test
+        ```
+    *   You can also specify other browsers if needed:
+        ```bash
+        npm run test:browser:firefox
+        npm run test:browser:webkit
+        ```
+3.  Test results will be displayed in your terminal.

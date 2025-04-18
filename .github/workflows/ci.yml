@@ -1,0 +1,30 @@
+name: CI Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # Use a current LTS version
+
+    - name: Install dependencies
+      run: npm install
+
+    # Install Playwright browsers needed for @vitest/browser
+    - name: Install Playwright Browsers
+      run: npx playwright install --with-deps
+
+    - name: Run Vitest tests (Browser Mode)
+      run: npm run test:browser # Use the browser test script
+
+    # Optional: Run Vitest tests (Node/JSDOM Mode if needed for non-browser tests)
+    # - name: Run Vitest tests (Node Mode)
+    #   run: npm test

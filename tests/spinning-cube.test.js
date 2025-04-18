@@ -1,8 +1,8 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Import the module to be tested
 import { init } from '../src/components/spinning-cube.js';
 
-// Access Chai assert interface (loaded globally via script tag)
-const assert = chai.assert;
+// No need for global chai anymore
 
 describe('Spinning Cube Component', () => {
   let container;
@@ -31,69 +31,62 @@ describe('Spinning Cube Component', () => {
   });
 
   it('init() should run without errors when given a valid container', () => {
-    assert.doesNotThrow(() => {
+    expect(() => {
       cleanupFunction = init(container);
-    }, Error, 'init should not throw an error');
+    }).not.toThrow();
   });
 
   it('init() should add a canvas element to the container', () => {
     cleanupFunction = init(container);
     const canvas = container.querySelector('canvas');
-    assert.isNotNull(canvas, 'Canvas element should be added');
-    assert.instanceOf(canvas, HTMLCanvasElement, 'Added element should be a Canvas');
+    expect(canvas).not.toBeNull();
+    expect(canvas).toBeInstanceOf(HTMLCanvasElement);
   });
 
   it('init() should return a cleanup function', () => {
     cleanupFunction = init(container);
-    assert.isFunction(cleanupFunction, 'init should return a function');
+    expect(cleanupFunction).toBeInstanceOf(Function);
   });
 
   it('returned cleanup function should run without errors', () => {
     cleanupFunction = init(container);
-    assert.isFunction(cleanupFunction, 'Precondition: cleanup function must exist');
-    assert.doesNotThrow(() => {
+    expect(cleanupFunction).toBeInstanceOf(Function); // Precondition check
+    expect(() => {
       cleanupFunction();
       cleanupFunction = null; // Prevent afterEach from calling it again
-    }, Error, 'Cleanup function should not throw an error');
+    }).not.toThrow();
   });
 
   it('cleanup function should remove the canvas element from the container', () => {
     cleanupFunction = init(container);
     let canvas = container.querySelector('canvas');
-    assert.isNotNull(canvas, 'Precondition: Canvas should exist after init');
+    expect(canvas).not.toBeNull(); // Precondition check
 
-    assert.isFunction(cleanupFunction, 'Cleanup function must exist');
+    expect(cleanupFunction).toBeInstanceOf(Function);
     cleanupFunction(); // Execute cleanup
     cleanupFunction = null; // Prevent afterEach double-call
 
     canvas = container.querySelector('canvas');
-    assert.isNull(canvas, 'Canvas element should be removed after cleanup');
+    expect(canvas).toBeNull();
   });
 
   it('init() should handle null container gracefully (log error, not throw)', () => {
-     // Temporarily spy on console.error
-     const originalConsoleError = console.error;
-     let consoleErrorCalled = false;
-     console.error = (message) => {
-        if (message.includes("Initialization failed: container element not provided.")) {
-            consoleErrorCalled = true;
-        }
-        originalConsoleError.apply(console, arguments); // Call original
-     };
+    // Spy on console.error using Vitest's built-in mocking
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Mock implementation to suppress output during test
 
-     assert.doesNotThrow(() => {
-         cleanupFunction = init(null); // Pass null container
-     }, Error, 'init(null) should not throw an error');
+    expect(() => {
+      cleanupFunction = init(null); // Pass null container
+    }).not.toThrow();
 
-     assert.isTrue(consoleErrorCalled, 'Expected console.error to be called with specific message');
-     assert.isFunction(cleanupFunction, 'init(null) should still return a cleanup function');
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Initialization failed: container element not provided."));
+    expect(cleanupFunction).toBeInstanceOf(Function); // Should still return a noop cleanup
 
-     // Restore console.error
-     console.error = originalConsoleError;
+    // Restore the original console.error
+    errorSpy.mockRestore();
 
-     // Test the "noop" cleanup function returned on failure
-     assert.doesNotThrow(() => {
-         if(cleanupFunction) cleanupFunction();
-     }, Error, 'Cleanup function returned from failed init should not throw');
+    // Test the "noop" cleanup function returned on failure
+    expect(() => {
+      if (cleanupFunction) cleanupFunction();
+    }).not.toThrow();
   });
 });
