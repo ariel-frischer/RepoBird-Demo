@@ -1,5 +1,7 @@
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 
 let scene, camera, renderer, controls;
 let textMesh = null;
@@ -43,7 +45,7 @@ export function init(container) {
     scene.add(directionalLight);
 
     // Font Loading and Text Geometry
-    const loader = new THREE.FontLoader();
+    const loader = new FontLoader();
     loader.load(
         'https://unpkg.com/three/examples/fonts/helvetiker_regular.typeface.json',
         (font) => {
