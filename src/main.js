@@ -4,6 +4,7 @@ console.log('Three.js version:', THREE.REVISION);
 
 const appContainer = document.getElementById('app-container');
 const sidebarContainer = document.getElementById('sidebar'); // Get the sidebar container
+const menuToggle = document.getElementById('menu-toggle'); // Get the menu toggle button
 
 let currentCleanup = null; // To store the cleanup function of the active demo
 let activeListItem = null; // To track the currently active list item
@@ -154,6 +155,17 @@ if (firstDemoKey && demoListElement) {
     // This case should ideally not happen if sidebar was populated
     appContainer.innerHTML = '<p>Could not load initial demo.</p>';
     console.error('Failed to find the demo list element for initial load styling.');
+}
+
+// --- Sidebar Toggle Logic ---
+if (menuToggle && sidebarContainer) {
+    menuToggle.addEventListener('click', () => {
+        sidebarContainer.classList.toggle('sidebar-visible');
+        console.log('Sidebar toggled'); // Added for debugging
+    });
+    console.log('Sidebar toggle listener added.');
+} else {
+    console.warn('Menu toggle button or sidebar container not found, toggle functionality disabled.');
 }
 
 console.log('Application initialized.');

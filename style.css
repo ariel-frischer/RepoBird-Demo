@@ -82,6 +82,8 @@ header h1 {
     flex-shrink: 0; /* Prevent sidebar from shrinking */
     height: 100%; /* Fill container height */
     box-sizing: border-box; /* Include padding in width/height */
+    /* Add transition for smooth slide-in/out */
+    transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
 }
 
 #sidebar h2 {
@@ -124,6 +126,7 @@ header h1 {
     align-items: center;
     overflow: hidden; /* Prevent scrollbars if canvas is larger */
     height: 100%; /* Fill container height */
+    transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out; /* Added for smoother transitions */
 }
 
 #app-container canvas {
@@ -133,4 +136,73 @@ header h1 {
 #app-container p {
     font-size: 1.2em;
     color: #aaa;
+}
+
+/* Hamburger Menu Button - Hidden by default */
+#menu-toggle {
+    display: none; /* Hidden on desktop */
+    background: none;
+    border: none;
+    color: #f0f0f0; /* Match header text */
+    font-size: 1.8rem; /* Larger size for touch */
+    cursor: pointer;
+    padding: 5px; /* Some padding for easier clicking */
+    line-height: 1; /* Prevent extra vertical space */
+    order: -1; /* Place it before the logo/title on mobile if needed */
+}
+
+/* --- Responsive Styles --- */
+@media (max-width: 768px) {
+    header {
+        padding: 10px 15px; /* Slightly reduce padding */
+        /* Ensure toggle and title/logo are spaced */
+        justify-content: space-between;
+    }
+
+    header h1 {
+        font-size: 1.3em; /* Slightly smaller title */
+        margin: 0 10px; /* Adjust margin */
+        text-align: left; /* Align title left */
+    }
+
+    #repobird-logo-link {
+        margin-right: 10px; /* Adjust spacing */
+    }
+
+    #header-right {
+        /* Hide GitHub button or adjust layout if needed */
+        /* display: none; */
+    }
+
+    #menu-toggle {
+        display: block; /* Show the button on mobile */
+        margin-right: 10px; /* Add some space between button and logo */
+    }
+
+    .container {
+         /* Stack sidebar and content vertically if needed, or manage via positioning */
+    }
+
+    #sidebar {
+        position: fixed; /* Position fixed to overlay content */
+        left: 0;
+        top: 0; /* Position from the top */
+        height: 100vh; /* Full viewport height */
+        z-index: 1000; /* Ensure it's above other content */
+        background-color: #333; /* Ensure background is solid */
+        transform: translateX(-100%); /* Hide off-screen to the left */
+        width: 200px; /* Keep width consistent when shown */
+        box-shadow: 2px 0 5px rgba(0,0,0,0.2); /* Add shadow for better separation */
+        padding-top: 60px; /* Add padding to clear the header potentially */
+        box-sizing: border-box;
+    }
+
+    #sidebar.sidebar-visible { /* State when sidebar should be visible */
+        transform: translateX(0); /* Slide in from the left */
+    }
+
+    #app-container {
+        margin-left: 0; /* Remove the margin typically occupied by sidebar */
+        width: 100%; /* Ensure content takes full width */
+    }
 }
