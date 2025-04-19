@@ -1,4 +1,4 @@
-'''import * as THREE from 'three';
+import * as THREE from 'three';
 
 console.log('Three.js version:', THREE.REVISION);
 
@@ -156,4 +156,3 @@ if (firstDemoKey && demoListElement) {
 }
 
 console.log('Application initialized.');
-'''

@@ -2,16 +2,21 @@
 // TODO: Requires browser environment for DOM access
 
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// Physics constants
+const SPRING_K = 30.0; // Spring stiffness - Reduced for less rigidity
+const DAMPING = 3.0;  // Damping factor - Reduced to allow more oscillation
+const MOUSE_FORCE = 25.0; // Multiplier for the force applied by mouse interaction - Significantly Increased
 
 export function init(container) {
-  let scene, camera, renderer, controls, planeMesh, raycaster, mouse, originalPositions;
+  let scene, camera, renderer, controls, planeMesh, raycaster, mouse, originalPositions, velocityAttribute, targetDisplacements;
   let animationFrameId;
   const clock = new THREE.Clock(); // For animation/decay
 
   // --- Basic Setup ---
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xeeeeee); // Light gray background
+  scene.background = new THREE.Color(0x1a1a1a); // Standardized dark background
 
   camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
   camera.position.set(0, 5, 10); // Position camera
@@ -48,6 +53,13 @@ export function init(container) {
   // Store original vertex positions
   originalPositions = planeMesh.geometry.attributes.position.clone();
 
+  // Initialize velocity attribute and target displacements array
+  const vertexCount = originalPositions.count;
+  velocityAttribute = new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3); // Initialize velocity (x, y, z)
+  planeMesh.geometry.setAttribute('velocity', velocityAttribute); // Add velocity to geometry
+  targetDisplacements = new Float32Array(vertexCount); // Initialize target displacements (stores target Z offset)
+
+
   // --- Interaction ---
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
@@ -71,12 +83,17 @@ export function init(container) {
       // Calculate objects intersecting the picking ray
       const intersects = raycaster.intersectObject(planeMesh);
 
+      // Reset target displacements for this frame before calculating new ones
+      targetDisplacements.fill(0);
+
       if (intersects.length > 0) {
           const intersectionPoint = intersects[0].point;
           const positionAttribute = planeMesh.geometry.attributes.position;
           const vertex = new THREE.Vector3();
           const maxDistance = 2.0; // Radius of effect
-          const maxDisplacement = 0.5; // Max height of bump
+          const maxWaveHeight = 2.5; // Max height of the wave caused by mouse - Increased
+          const time = clock.getElapsedTime(); // Get time for wave effect
+
 
           for (let i = 0; i < positionAttribute.count; i++) {
               vertex.fromBufferAttribute(positionAttribute, i);
@@ -87,18 +104,17 @@ export function init(container) {
 
               if (dist < maxDistance) {
                   // Calculate displacement based on distance (e.g., Gaussian-like)
-                  const displacement = maxDisplacement * Math.exp(-(dist * dist) / (maxDistance / 2)); // Gaussian falloff
-                  //const displacement = maxDisplacement * (1 - Math.smoothstep(0, maxDistance, dist)); // Smoothstep falloff
+                  // Calculate displacement using Gaussian falloff combined with a sine wave based on distance and time
+                  const falloff = Math.exp(-(dist * dist) / (maxDistance * 0.5)); // Gaussian falloff
+                  const wave = Math.sin(dist * 1.5 - time * 5.0); // Sine wave
+                  const calculatedDisplacement = maxWaveHeight * falloff * wave;
 
-                  // Modify the z position (which is y in the mesh's local space due to rotation)
-                  const targetZ = originalPositions.getZ(i) + displacement;
-                  // Smoothly move towards target Z
-                  const currentZ = positionAttribute.getZ(i);
-                  positionAttribute.setZ(i, currentZ + (targetZ - currentZ) * 0.1); // Smoothing factor
-
+                  // Store the calculated displacement as the target for this vertex
+                  targetDisplacements[i] = calculatedDisplacement;
               }
           }
-          positionAttribute.needsUpdate = true;
+          // No need to set positionAttribute.needsUpdate = true here,
+          // as the physics simulation in animate() handles position updates.
       }
   }
 
@@ -114,31 +130,49 @@ export function init(container) {
   // --- Animation Loop ---
   function animate() {
       animationFrameId = requestAnimationFrame(animate);
-      const delta = clock.getDelta(); // Time elapsed since last frame
+      const delta = Math.min(clock.getDelta(), 0.05); // Clamp delta to avoid instability with large steps
 
-      // --- Gradual Decay of Deformation ---
+      // --- Physics Simulation ---
       const positionAttribute = planeMesh.geometry.attributes.position;
-      let needsUpdate = false;
-      const decayFactor = 1.0 - Math.min(delta * 5.0, 1.0); // Adjust decay speed (e.g., 5 times per second)
+      const velocity = planeMesh.geometry.attributes.velocity; // Get velocity attribute
 
       for (let i = 0; i < positionAttribute.count; i++) {
-          const currentZ = positionAttribute.getZ(i);
           const originalZ = originalPositions.getZ(i);
-          if (Math.abs(currentZ - originalZ) > 0.01) { // Only decay if significantly displaced
-             positionAttribute.setZ(i, originalZ + (currentZ - originalZ) * decayFactor);
-             needsUpdate = true;
-          } else if (currentZ !== originalZ) {
-             // Snap back if very close to avoid tiny perpetual oscillations
-             positionAttribute.setZ(i, originalZ);
-             needsUpdate = true;
-          }
+          const currentZ = positionAttribute.getZ(i);
+          const currentVelocityZ = velocity.getZ(i);
+
+          // Calculate forces
+          const displacement = currentZ - originalZ;
+          const springForce = -SPRING_K * displacement; // Force pulling back to origin
+          const dampingForce = -DAMPING * currentVelocityZ; // Force opposing velocity
+
+          // Calculate force from mouse interaction (pushing towards target displacement)
+          // This force is stronger if the vertex is further from its target displacement
+          const targetDisplacement = targetDisplacements[i];
+          const mouseInteractionForce = MOUSE_FORCE * (targetDisplacement - displacement);
+
+          // Total force (mass assumed to be 1)
+          const totalForce = springForce + dampingForce + mouseInteractionForce;
+
+          // Update velocity (acceleration = force / mass)
+          const newVelocityZ = currentVelocityZ + totalForce * delta;
+
+          // Update position
+          const newZ = currentZ + newVelocityZ * delta;
+
+          // Set updated values
+          positionAttribute.setZ(i, newZ);
+          velocity.setZ(i, newVelocityZ);
       }
 
-      if (needsUpdate) {
-          positionAttribute.needsUpdate = true;
-      }
+      // Mark attributes for update
+      positionAttribute.needsUpdate = true;
+      velocity.needsUpdate = true;
 
-      controls.update(delta); // Update controls if enableDamping is true
+      // Reset target displacements for the next frame (mouse move will repopulate)
+      // targetDisplacements.fill(0); // Moved this to the start of onMouseMove
+
+      controls.update(); // Update controls if enableDamping is true
       renderer.render(scene, camera);
   }
 
@@ -154,8 +188,14 @@ export function init(container) {
 
       // Dispose Three.js objects
       controls.dispose();
-      geometry.dispose();
-      material.dispose();
+      if (geometry) {
+          geometry.dispose(); // Dispose geometry (includes originalPositions implicitly?)
+          // Explicitly dispose added attributes
+          if (geometry.attributes.velocity) {
+              geometry.deleteAttribute('velocity'); // Or velocityAttribute.dispose() if it works
+          }
+      }
+      if (material) material.dispose();
       // Dispose any textures if they were used
       // texture.dispose();
 
@@ -175,7 +215,9 @@ export function init(container) {
       planeMesh = null;
       raycaster = null;
       mouse = null;
-      originalPositions = null;
+      originalPositions = null; // BufferAttribute doesn't have dispose
+      velocityAttribute = null; // BufferAttribute doesn't have dispose
+      targetDisplacements = null;
       console.log('Interactive Plane cleanup complete.');
   }
 

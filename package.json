@@ -4,11 +4,12 @@
   "description": "Demos of visual apps built with RepoBird using Three.js.",
   "type": "module",
   "scripts": {
-    "test": "vitest",
+    "test": "vitest --browser --run",
     "test:browser": "vitest --browser --run",
     "test:browser:chrome": "vitest --browser=chrome --run",
     "test:browser:firefox": "vitest --browser=firefox --run",
-    "test:browser:webkit": "vitest --browser=webkit --run"
+    "test:browser:webkit": "vitest --browser=webkit --run",
+    "dev": "live-server --port=8080 --open=./index.html"
   },
   "keywords": [
     "threejs",
@@ -22,6 +23,7 @@
     "jsdom": "^24.0.0",
     "playwright": "^1.44.0",
     "three": "^0.163.0",
-    "vitest": "^1.5.0"
+    "vitest": "^1.5.0",
+    "live-server": "^1.2.2"
   }
 }

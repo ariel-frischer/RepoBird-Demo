@@ -30,37 +30,52 @@ This repository showcases visual applications primarily implemented by the [Repo
 
 ## Running Locally
 
-Since this project uses ES Modules (`import` statements in JavaScript), you need to serve the files using a local web server. You cannot simply open `index.html` directly in your browser from the file system.
-
-1.  **Navigate to the project directory** in your terminal.
-2.  **Start a simple web server.** If you have Python installed, you can use:
-    ```bash
-    python3 -m http.server
-    ```
-    (If `python3` doesn't work, try `python -m http.server`)
-3.  **Open your web browser** and go to `http://localhost:8000` (or the address provided by the server).
-4.  Use the sidebar menu to select and view the demos.
-
-## Running Tests
-
-This project uses [Vitest](https://vitest.dev/) with `@vitest/browser` and Playwright for testing the components in a real browser environment.
+This project uses ES Modules and requires a local development server. We've included `live-server` for convenience, which provides automatic browser reloading when files change.
 
 1.  **Install dependencies:**
     ```bash
     npm install
     ```
+2.  **Start the development server:**
+    ```bash
+    npm run dev
+    ```
+    This will automatically open the `index.html` page in your default browser and reload it when you save changes to project files.
+3.  Use the sidebar menu to select and view the demos.
+
+## Running Tests
+
+This project uses [Vitest](https://vitest.dev/) with `@vitest/browser` and Playwright for testing the components in a real browser environment.
+
+1.  **Install dependencies** (if you haven't already for running locally):
+    ```bash
+    npm install
+    ```
 2.  **Run tests:**
-    *   To run tests in a headless browser (Chromium by default, configured in `vitest.config.js`):
-        ```bash
-        npm run test:browser
-        ```
-    *   To run tests using Node.js/JSDOM (if applicable for non-browser tests):
+    *   To run the default browser tests (Chromium by default, configured in `vitest.config.js`):
         ```bash
         npm test
         ```
-    *   You can also specify other browsers if needed:
+    *   You can also specify other browsers explicitly:
         ```bash
         npm run test:browser:firefox
         npm run test:browser:webkit
+
+        # Run all browser tests sequentially (Chrome, Firefox, WebKit)
+        npm run test:browser:chrome && npm run test:browser:firefox && npm run test:browser:webkit
         ```
 3.  Test results will be displayed in your terminal.
+
+### Testing Strategy
+
+*   **Browser Tests (`npm test`):** These use `@vitest/browser` and Playwright to run tests in actual browser environments (Chromium, Firefox, WebKit). This is the primary way to test the Three.js components in this project. The default command `npm test` runs these tests.
+*   **Focus:** The current tests primarily verify:
+    *   Component initialization (`init` function runs without errors).
+    *   A `<canvas>` element is correctly added to the container.
+    *   The `cleanup` function is returned and executes without errors.
+    *   The `<canvas>` element is removed upon cleanup.
+*   **Visual Consistency:** While not automatically asserted in the current tests, components should strive for visual consistency where appropriate (e.g., using the standard dark background color `0x1a1a1a`). Verifying rendering details like specific colors, lighting, or model appearance typically requires visual regression testing tools, which are not currently implemented.
+
+## Notes
+
+*   **Three.js Addons:** This project uses an `importmap` in `index.html` to manage Three.js imports. When importing addons (like `OrbitControls`, `FontLoader`, etc.), make sure to use the path prefix defined in the import map, which is currently `three/addons/`. For example: `import { OrbitControls } from 'three/addons/controls/OrbitControls.js';`. This differs from the older `three/examples/jsm/` path sometimes seen in examples.
