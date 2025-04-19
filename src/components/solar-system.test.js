@@ -7,13 +7,17 @@ import { init } from './solar-system.js'; // Corrected import path
 // or if we want to explicitly test behavior *without* textures.
 
 // NOTE: vi.mock is not reliably supported in the browser test environment for this project.
-// Texture loading errors in the console during tests are expected.
+// Texture loading errors in the console during tests are expected, as the component
+// attempts to load textures which might fail in this environment.
 // The component should handle these errors gracefully (e.g., using fallback materials).
+// NOTE: Tests cannot be automatically run in the current execution environment due to lack of Node.js/npm.
 
 describe('Solar System Component', () => {
   let container;
   let cleanupFunction;
   let scene; // Variable to hold the scene object
+
+  const PLANET_NAMES = ['Mercury', 'Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'];
 
   // Create a container element before each test
   beforeEach(() => {
@@ -107,6 +111,8 @@ describe('Solar System Component', () => {
 
     canvas = container.querySelector('canvas');
     expect(canvas).toBeNull();
+    // Also check if scene is disposed (children removed)
+    expect(scene.children.length).toBe(0);
   });
 
   // --- Component-Specific Tests ---
@@ -132,30 +138,39 @@ describe('Solar System Component', () => {
       expect(sun).toBeInstanceOf(THREE.Mesh);
       expect(sun.material).toBeInstanceOf(THREE.MeshBasicMaterial);
       // Texture check: Verify a texture object exists (even if loading failed)
+      // Note: Texture loading errors may appear in console due to test env limitations.
       expect(sun.material.map).toBeInstanceOf(THREE.Texture);
-      // We cannot reliably check the name/path without mocking here.
     });
 
-    it('should contain an Earth mesh with MeshStandardMaterial inside a pivot', () => {
-      expect(scene).toBeDefined();
-      // Earth is inside a pivot object named 'EarthPivot'
-      const earthPivot = scene.getObjectByName('EarthPivot');
-      expect(earthPivot).toBeInstanceOf(THREE.Object3D);
-      expect(earthPivot.children.length).toBeGreaterThan(0);
-
-      const earth = earthPivot.getObjectByName('Earth'); // Find Earth within the pivot
-      expect(earth).toBeInstanceOf(THREE.Mesh);
-      expect(earth.name).toBe('Earth');
-      expect(earth.material).toBeInstanceOf(THREE.MeshStandardMaterial);
-
-      // Texture check (similar to Sun)
-      expect(earth.material.map).toBeInstanceOf(THREE.Texture);
-      // We cannot reliably check the name/path without mocking here.
+    it('should contain pivots for all planets', () => {
+       expect(scene).toBeDefined();
+       PLANET_NAMES.forEach(name => {
+         const pivot = scene.getObjectByName(`${name}Pivot`);
+         expect(pivot).toBeInstanceOf(THREE.Object3D);
+         expect(pivot.name).toBe(`${name}Pivot`);
+       });
     });
+
+    it('should contain meshes for all planets inside their respective pivots', () => {
+        expect(scene).toBeDefined();
+        PLANET_NAMES.forEach(name => {
+          const pivot = scene.getObjectByName(`${name}Pivot`);
+          expect(pivot).toBeInstanceOf(THREE.Object3D); // Ensure pivot exists first
+          const planet = pivot.getObjectByName(name);
+          expect(planet).toBeInstanceOf(THREE.Mesh);
+          expect(planet.name).toBe(name);
+          // All planets should have MeshStandardMaterial (Sun has MeshBasic)
+          expect(planet.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+          // Texture check: Verify a texture map exists, even if loading failed
+          expect(planet.material.map).toBeInstanceOf(THREE.Texture);
+        });
+    });
+
 
     it('should contain a Moon mesh as a child of Earth', () => {
       expect(scene).toBeDefined();
-      const earth = scene.getObjectByName('Earth'); // Find Earth directly or via pivot then search
+      const earthPivot = scene.getObjectByName('EarthPivot');
+      const earth = earthPivot?.getObjectByName('Earth'); // Find Earth via pivot
       expect(earth).toBeInstanceOf(THREE.Mesh); // Earth must exist
 
       // Find the Moon by name as a child of Earth
@@ -171,27 +186,43 @@ describe('Solar System Component', () => {
 
      it('should have exactly one child for the Earth mesh (the Moon)', () => {
         expect(scene).toBeDefined();
-        const earth = scene.getObjectByName('Earth');
+        const earthPivot = scene.getObjectByName('EarthPivot');
+        const earth = earthPivot?.getObjectByName('Earth');
         expect(earth).toBeInstanceOf(THREE.Mesh);
         // Check children count - should only be the Moon mesh
         expect(earth.children.length).toBe(1);
         expect(earth.children[0].name).toBe('Moon'); // Verify the child is indeed the Moon
      });
 
-     it('should contain pivots for all planets', () => {
+    it('should contain Saturn Rings mesh as a child of Saturn Pivot', () => {
         expect(scene).toBeDefined();
-        const mercuryPivot = scene.getObjectByName('MercuryPivot');
-        const earthPivot = scene.getObjectByName('EarthPivot');
-        const marsPivot = scene.getObjectByName('MarsPivot');
+        const saturnPivot = scene.getObjectByName('SaturnPivot');
+        expect(saturnPivot).toBeInstanceOf(THREE.Object3D);
 
-        expect(mercuryPivot).toBeInstanceOf(THREE.Object3D);
-        expect(earthPivot).toBeInstanceOf(THREE.Object3D);
-        expect(marsPivot).toBeInstanceOf(THREE.Object3D);
+        const rings = saturnPivot.getObjectByName('SaturnRings');
+        expect(rings).toBeInstanceOf(THREE.Mesh);
+        expect(rings.name).toBe('SaturnRings');
+        expect(rings.geometry).toBeInstanceOf(THREE.RingGeometry); // Check geometry
+        expect(rings.material).toBeInstanceOf(THREE.MeshBasicMaterial); // Check material
+        expect(rings.material.transparent).toBe(true); // Check transparency
+        expect(rings.material.side).toBe(THREE.DoubleSide); // Check side rendering
+        // Texture check: Verify a texture map exists, even if loading failed
+        expect(rings.material.map).toBeInstanceOf(THREE.Texture);
+        expect(rings.material.alphaMap).toBeInstanceOf(THREE.Texture); // Check for alpha map
+    });
 
-        expect(mercuryPivot.getObjectByName('Mercury')).toBeInstanceOf(THREE.Mesh);
-        expect(earthPivot.getObjectByName('Earth')).toBeInstanceOf(THREE.Mesh);
-        expect(marsPivot.getObjectByName('Mars')).toBeInstanceOf(THREE.Mesh);
-     });
+    it('should contain orbit line meshes for all planets directly in the scene', () => {
+        expect(scene).toBeDefined();
+        PLANET_NAMES.forEach(name => {
+          const orbitLine = scene.getObjectByName(`${name}Orbit`);
+          expect(orbitLine).toBeInstanceOf(THREE.Mesh);
+          expect(orbitLine.name).toBe(`${name}Orbit`);
+          expect(orbitLine.geometry).toBeInstanceOf(THREE.RingGeometry); // Check geometry
+          expect(orbitLine.material).toBeInstanceOf(THREE.MeshBasicMaterial); // Check material
+          expect(orbitLine.material.side).toBe(THREE.DoubleSide); // Check side rendering
+        });
+    });
+
   });
 
 });

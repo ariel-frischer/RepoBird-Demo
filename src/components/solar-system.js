@@ -2,35 +2,19 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 export function init(container) {
-    // Check if container is provided and valid
     if (!container || !(container instanceof HTMLElement)) {
         console.error("Initialization failed: container element not provided or invalid.");
-        // Return a no-op cleanup function and null scene
         return { cleanup: () => {}, scene: null };
     }
 
-    let scene, camera, renderer, clock, controls, animationFrameId, earthMesh;
-    const planets = []; // To store pivot objects for cleanup
-    const textureLoader = new THREE.TextureLoader(); // Instantiate TextureLoader
+    let scene, camera, renderer, clock, controls, animationFrameId;
+    const planets = []; // Stores { pivot, mesh, orbitMesh }
+    const textures = {}; // Stores loaded textures { name: texture }
+    const disposables = []; // Stores geometries, materials, textures for cleanup
+    const textureLoader = new THREE.TextureLoader();
 
-    // Load textures
-    // Use placeholder paths for now, actual paths might differ or require setup
-    const sunTexturePath = 'src/assets/textures/sun_texture.jpg';
-    const earthTexturePath = 'src/assets/textures/earth_texture.jpg';
-    let sunTexture, earthTexture;
-    try {
-        sunTexture = textureLoader.load(sunTexturePath);
-        earthTexture = textureLoader.load(earthTexturePath);
-        // Add error handling for texture loading
-        textureLoader.manager.onError = (url) => console.error(`Error loading texture: ${url}`);
-    } catch (error) {
-        console.error("Error initializing TextureLoader or loading textures:", error);
-        // If textures fail, maybe proceed with basic materials or return error?
-        // For now, log error and continue, materials will be basic.
-        sunTexture = null; // Ensure these are null if loading fails
-        earthTexture = null;
-    }
-
+    // Error handling for texture loading
+    textureLoader.manager.onError = (url) => console.error(`Error loading texture: ${url}`);
 
     // Scene setup
     scene = new THREE.Scene();
@@ -39,123 +23,166 @@ export function init(container) {
 
     // Camera setup
     camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.z = 20;
-    camera.position.y = 10;
+    camera.position.set(0, 30, 50); // Adjusted camera position
+    camera.lookAt(0, 0, 0);
 
     // Renderer setup
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
+    disposables.push(renderer); // Add renderer for disposal
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Slightly brighter ambient
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(5, 10, 7.5);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // Slightly stronger directional
+    directionalLight.position.set(10, 20, 15);
     scene.add(directionalLight);
 
     // Sun
-    const sunGeometry = new THREE.SphereGeometry(2, 32, 32);
-    // Apply sun texture if loaded, otherwise basic yellow
-    const sunMaterial = sunTexture
-        ? new THREE.MeshBasicMaterial({ map: sunTexture, name: 'SunMaterial' })
-        : new THREE.MeshBasicMaterial({ color: 0xffff00, name: 'SunMaterialFallback' });
+    const sunGeometry = new THREE.SphereGeometry(4, 64, 64); // Larger Sun
+    disposables.push(sunGeometry);
+    const sunTexturePath = 'src/assets/textures/sun_texture.jpg';
+    let sunMaterial;
+    try {
+        const sunTexture = textureLoader.load(sunTexturePath);
+        textures['Sun'] = sunTexture;
+        disposables.push(sunTexture);
+        sunMaterial = new THREE.MeshBasicMaterial({ map: sunTexture, name: 'SunMaterial' });
+    } catch (error) {
+        console.error(`Error loading Sun texture: ${sunTexturePath}`, error);
+        sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, name: 'SunMaterialFallback' });
+    }
+    disposables.push(sunMaterial);
     const sun = new THREE.Mesh(sunGeometry, sunMaterial);
-    sun.name = 'Sun'; // Assign name for testing
+    sun.name = 'Sun';
     scene.add(sun);
 
-    // Planets Data (radius, color, orbitalRadius, speed)
+    // Planets Data (radius, orbitalRadius, speed, selfRotationSpeed, textureFile, [ring details])
     const planetData = [
-        { name: 'Mercury', radius: 0.5, color: 0xaaaaaa, orbitalRadius: 4, speed: 0.5 },
-        { name: 'Earth', radius: 0.8, color: 0x0000ff, orbitalRadius: 7, speed: 0.3 }, // Earth data
-        { name: 'Mars', radius: 0.6, color: 0xff0000, orbitalRadius: 10, speed: 0.2 },
+        { name: 'Mercury', radius: 0.5, color: 0xaaaaaa, orbitalRadius: 8, speed: 0.4, selfRotationSpeed: 0.004, textureFile: 'mercury_texture.jpg' },
+        { name: 'Venus', radius: 0.9, color: 0xffd700, orbitalRadius: 12, speed: 0.3, selfRotationSpeed: 0.002, textureFile: 'venus_texture.jpg' },
+        { name: 'Earth', radius: 1.0, color: 0x0000ff, orbitalRadius: 16, speed: 0.25, selfRotationSpeed: 0.01, textureFile: 'earth_texture.jpg' },
+        { name: 'Mars', radius: 0.7, color: 0xff0000, orbitalRadius: 20, speed: 0.2, selfRotationSpeed: 0.009, textureFile: 'mars_texture.jpg' },
+        { name: 'Jupiter', radius: 3.5, color: 0xffa500, orbitalRadius: 30, speed: 0.1, selfRotationSpeed: 0.02, textureFile: 'jupiter_texture.jpg' },
+        { name: 'Saturn', radius: 3.0, color: 0xf0e68c, orbitalRadius: 40, speed: 0.08, selfRotationSpeed: 0.018, textureFile: 'saturn_texture.jpg', ring: { innerRadius: 4, outerRadius: 6, textureFile: 'saturn_rings_texture.png' } },
+        { name: 'Uranus', radius: 2.0, color: 0xadd8e6, orbitalRadius: 50, speed: 0.05, selfRotationSpeed: 0.015, textureFile: 'uranus_texture.jpg' },
+        { name: 'Neptune', radius: 1.9, color: 0x00008b, orbitalRadius: 60, speed: 0.03, selfRotationSpeed: 0.014, textureFile: 'neptune_texture.jpg' },
     ];
 
-    // Create Planets
+    // Create Planets, Orbits, and Rings
     planetData.forEach(data => {
-        const planetGeometry = new THREE.SphereGeometry(data.radius, 32, 32); // Increased segments for texture
+        const planetGeometry = new THREE.SphereGeometry(data.radius, 32, 32);
+        disposables.push(planetGeometry);
         let planetMaterial;
-
-        if (data.name === 'Earth') {
-            // Apply earth texture if loaded, otherwise basic blue
-            planetMaterial = earthTexture
-                ? new THREE.MeshStandardMaterial({ map: earthTexture, roughness: 0.8, metalness: 0.1, name: 'EarthMaterial' })
-                : new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.8, metalness: 0.1, name: 'EarthMaterialFallback' });
-        } else {
-            planetMaterial = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.8, metalness: 0.1, name: `${data.name}Material` });
+        const texturePath = `src/assets/textures/${data.textureFile}`;
+        try {
+            const planetTexture = textureLoader.load(texturePath);
+            textures[data.name] = planetTexture;
+            disposables.push(planetTexture);
+            planetMaterial = new THREE.MeshStandardMaterial({ map: planetTexture, roughness: 0.8, metalness: 0.1, name: `${data.name}Material` });
+        } catch (error) {
+            console.error(`Error loading texture for ${data.name}: ${texturePath}`, error);
+            planetMaterial = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.8, metalness: 0.1, name: `${data.name}MaterialFallback` });
         }
+        disposables.push(planetMaterial);
 
-        const planet = new THREE.Mesh(planetGeometry, planetMaterial);
-        planet.name = data.name; // Assign name for identification
+        const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
+        planetMesh.name = data.name;
+        planetMesh.userData.selfRotationSpeed = data.selfRotationSpeed; // Store self-rotation speed
 
         // Pivot for orbit
         const pivot = new THREE.Object3D();
-        pivot.name = `${data.name}Pivot`; // Name the pivot too
-        pivot.add(planet);
-        planet.position.x = data.orbitalRadius;
-        pivot.userData.speed = data.speed; // Store speed for animation
+        pivot.name = `${data.name}Pivot`;
+        pivot.add(planetMesh);
+        planetMesh.position.x = data.orbitalRadius;
+        pivot.userData.speed = data.speed; // Store orbital speed
 
         scene.add(pivot);
-        planets.push(pivot); // Add pivot to array for animation and cleanup
 
-        // Store Earth mesh reference
+        // Create Orbit Visualization
+        const orbitGeometry = new THREE.RingGeometry(data.orbitalRadius - 0.05, data.orbitalRadius + 0.05, 128); // Thin ring
+        disposables.push(orbitGeometry);
+        const orbitMaterial = new THREE.MeshBasicMaterial({ color: 0x555555, side: THREE.DoubleSide });
+        disposables.push(orbitMaterial);
+        const orbitMesh = new THREE.Mesh(orbitGeometry, orbitMaterial);
+        orbitMesh.name = `${data.name}Orbit`;
+        orbitMesh.rotation.x = Math.PI / 2; // Rotate to lie flat on XZ plane
+        scene.add(orbitMesh);
+
+        planets.push({ pivot, mesh: planetMesh, orbitMesh }); // Store references
+
+        // Special handling for Earth's Moon
         if (data.name === 'Earth') {
-            earthMesh = planet;
+            const moonGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+            disposables.push(moonGeometry);
+            const moonMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.9, name: 'MoonMaterial' });
+            disposables.push(moonMaterial);
+            const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
+            moonMesh.name = 'Moon';
+            moonMesh.position.set(1.5, 0, 0); // Position relative to Earth
+            planetMesh.add(moonMesh); // Add Moon as child of Earth mesh
+        }
+
+        // Special handling for Saturn's Rings
+        if (data.name === 'Saturn' && data.ring) {
+            const ringTexturePath = `src/assets/textures/${data.ring.textureFile}`;
+            let ringMesh;
+            try {
+                const ringTexture = textureLoader.load(ringTexturePath);
+                textures[`${data.name}Ring`] = ringTexture;
+                disposables.push(ringTexture);
+                const ringGeometry = new THREE.RingGeometry(data.ring.innerRadius, data.ring.outerRadius, 64);
+                disposables.push(ringGeometry);
+                const ringMaterial = new THREE.MeshBasicMaterial({
+                    map: ringTexture,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.8, // Make rings slightly transparent
+                    name: 'SaturnRingMaterial'
+                });
+                disposables.push(ringMaterial);
+                ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+                ringMesh.name = 'SaturnRings';
+                ringMesh.rotation.x = Math.PI / 2 + 0.2; // Tilt the rings slightly
+                ringMesh.position.set(0, 0, 0); // Center rings on Saturn's pivot origin
+                // Add rings as a child of the *pivot* so they orbit with Saturn but don't spin with it
+                pivot.add(ringMesh);
+            } catch (error) {
+                console.error(`Error loading or creating Saturn rings: ${ringTexturePath}`, error);
+            }
         }
     });
-
-    // Create Moon
-    if (earthMesh) { // Only create moon if Earth was created
-        const moonGeometry = new THREE.SphereGeometry(0.2, 16, 16);
-        const moonMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.9, name: 'MoonMaterial' });
-        const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
-        moonMesh.name = 'Moon';
-
-        // Position moon relative to Earth
-        moonMesh.position.set(1.5, 0, 0); // Orbit distance from Earth surface
-
-        // Add moon as a child of Earth mesh
-        earthMesh.add(moonMesh);
-    } else {
-        console.warn("Earth mesh not found during initialization, cannot add moon.");
-    }
-
 
     // Controls
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    disposables.push(controls); // Add controls for disposal
 
     // Animation loop
     function animate() {
         animationFrameId = requestAnimationFrame(animate);
-
         const elapsedTime = clock.getElapsedTime();
 
-        // Animate planets orbital rotation (pivots)
-        planets.forEach(pivot => {
-            pivot.rotation.y = elapsedTime * pivot.userData.speed;
+        // Animate planets: orbital rotation (pivots) and self-rotation (meshes)
+        planets.forEach(p => {
+            p.pivot.rotation.y = elapsedTime * p.pivot.userData.speed;
+            p.mesh.rotation.y += p.mesh.userData.selfRotationSpeed;
+
+            // Animate Moon orbit around Earth (simple rotation around Earth's local Y)
+            if (p.mesh.name === 'Earth') {
+                const moon = p.mesh.getObjectByName('Moon');
+                if (moon) {
+                    // Simple orbit: rotate the moon mesh around its local Y axis relative to Earth.
+                    // More complex orbit would involve another pivot.
+                     moon.rotation.y += 0.02; // Make moon orbit Earth
+                }
+            }
         });
 
-        // Animate Earth's axial rotation
-        if (earthMesh) {
-            earthMesh.rotation.y += 0.005; // Earth spins on its axis
-             // Animate Moon's rotation around Earth (relative to Earth's frame)
-            const moon = earthMesh.getObjectByName('Moon');
-            if (moon) {
-                // This makes the moon orbit Earth as Earth spins.
-                // If we want moon orbit independent of Earth spin, attach moon to a pivot parented to Earth.
-                // For simplicity, we'll rotate the moon directly for now.
-                // A simple rotation around Earth's Y axis (local)
-                // moon.rotation.y += 0.01; // Moon could spin itself
-                // To make it orbit, we could rotate the *parent* but moon is direct child.
-                // Let's rotate earthMesh's child moon around earthmesh's center.
-                // This requires moving the moon out and rotating a pivot, or complex math.
-                // For now, let's just let it be attached and spin with earth + slightly faster
-                 moon.rotation.y += 0.01; // Moon spins slightly faster than earth
-            }
-        }
-
+        // Animate Sun's self-rotation (slowly)
+        sun.rotation.y += 0.0005;
 
         controls.update();
         renderer.render(scene, camera);
@@ -163,10 +190,10 @@ export function init(container) {
 
     // Handle Resize
     function onWindowResize() {
-        if (!container) return; // Prevent errors if container is gone
+        if (!container || !renderer || !camera) return;
         const width = container.clientWidth;
         const height = container.clientHeight;
-        if (width === 0 || height === 0) return; // Avoid issues with 0 dimensions
+        if (width === 0 || height === 0) return;
 
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
@@ -183,69 +210,43 @@ export function init(container) {
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
         window.removeEventListener('resize', onWindowResize);
 
-        if (controls) controls.dispose();
-
-        // Dispose textures only if they were loaded
-        if (sunTexture) sunTexture.dispose();
-        if (earthTexture) earthTexture.dispose();
-
-        // Dispose geometries and materials
-        // Make sure objects exist before accessing properties
-        if (sun && sun.geometry) sun.geometry.dispose();
-        if (sun && sun.material) sun.material.dispose();
-
-        planets.forEach(pivot => {
-            // Iterate through children safely
-            if (pivot && pivot.children) {
-                pivot.children.forEach(child => {
-                    if (child instanceof THREE.Mesh) {
-                        const mesh = child;
-                         // Dispose moon resources if this is Earth
-                        if (mesh.name === 'Earth' && mesh.children) {
-                            mesh.children.forEach(grandchild => {
-                                if (grandchild instanceof THREE.Mesh && grandchild.name === 'Moon') {
-                                    if (grandchild.geometry) grandchild.geometry.dispose();
-                                    if (grandchild.material) grandchild.material.dispose();
-                                }
-                            });
-                            // Clear children array after disposing
-                            mesh.children.length = 0;
-                        }
-                         // Dispose planet resources
-                        if (mesh.geometry) mesh.geometry.dispose();
-                        if (mesh.material) mesh.material.dispose();
-                    }
-                });
-                 // Clear children array after disposing
-                 pivot.children.length = 0;
+        // Dispose all tracked resources
+        disposables.forEach(item => {
+            if (item && typeof item.dispose === 'function') {
+                item.dispose();
             }
-            if (scene && pivot) scene.remove(pivot); // Remove pivot from scene
         });
-        planets.length = 0; // Clear the planets array
+        disposables.length = 0; // Clear the array
 
-        // Remove other scene objects
-        if (scene && sun) scene.remove(sun);
-        if (scene && ambientLight) scene.remove(ambientLight);
-        if (scene && directionalLight) scene.remove(directionalLight);
-
-        if (renderer) {
-            renderer.dispose();
-            if (renderer.domElement && renderer.domElement.parentNode === container) {
-                container.removeChild(renderer.domElement);
+        // Remove all objects from the scene
+        if (scene) {
+            while(scene.children.length > 0){
+                const object = scene.children[0];
+                // If it's a pivot, ensure its children (planet, rings, moon) are handled
+                if (object instanceof THREE.Object3D) {
+                     // Geometries/materials are disposed via `disposables` array
+                     // We just need to remove from scene hierarchy
+                }
+                scene.remove(object);
             }
         }
-        // Nullify references
-        earthMesh = null;
-        // Consider nullifying scene, camera, renderer etc. if needed for GC
+
+        // Clear arrays and references
+        planets.length = 0;
+        Object.keys(textures).forEach(key => delete textures[key]);
+
+
+        if (renderer && renderer.domElement && renderer.domElement.parentNode === container) {
+            container.removeChild(renderer.domElement);
+        }
+
+        // Nullify Three.js objects
         scene = null;
         camera = null;
         renderer = null;
         controls = null;
         clock = null;
-        // Make sure container is not accessed after cleanup
-        // container = null; // Don't nullify container, it's managed by the test's afterEach
     }
 
-    // Return both cleanup function and the scene object
     return { cleanup, scene };
 }
