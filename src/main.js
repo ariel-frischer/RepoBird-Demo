@@ -16,8 +16,9 @@ const demos = {
     'rubiks-cube': () => import('./components/rubiks-cube.js'),
     'solar-system': () => import('./components/solar-system.js'),
     'particle-emitter': () => import('./components/particle-emitter.js'),
-    'torus-knot': () => import('./components/torus-knot.js'), // Added new demo
+    'torus-knot': () => import('./components/torus-knot.js'),
     'interactive-plane': () => import('./components/interactive-plane.js'),
+    'wireframe-sphere': () => import('./components/wireframe-sphere.js'), // Added wireframe sphere
 };
 
 async function loadDemo(demoKey) {

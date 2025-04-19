@@ -7,7 +7,7 @@ let resizeHandler = null;
 function setupScene(container) {
     // Scene
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xeeeeee);
+    scene.background = new THREE.Color(0x1a1a1a); // Standardized dark background
 
     // Camera
     camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
@@ -128,7 +128,8 @@ function specificCleanup() {
 export function init(container) {
     if (!container) {
         console.error('Container element not provided for Wireframe Sphere');
-        return () => {}; // Return a no-op cleanup function
+        // Return the expected object structure for the test
+        return { cleanup: () => {}, scene: null };
     }
     if (renderer) {
         console.warn('Wireframe Sphere already initialized. Cleaning up previous instance.');
@@ -139,10 +140,12 @@ export function init(container) {
         setupScene(container);
         animate();
         // console.log('Wireframe Sphere initialized successfully.');
-        return specificCleanup; // Return the actual cleanup function
+        // Return both cleanup and scene for testing purposes
+        return { cleanup: specificCleanup, scene: scene };
     } catch (error) {
         console.error('Error initializing Wireframe Sphere:', error);
         specificCleanup(); // Attempt cleanup even if setup failed
-        return () => {}; // Return a no-op cleanup function on error
+        // Return a no-op cleanup and null scene on error
+        return { cleanup: () => {}, scene: null };
     }
 }
