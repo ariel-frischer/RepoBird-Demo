@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js'; // Import TextGeometry
 
 let scene, camera, renderer, controls;
 let textMesh = null;
@@ -47,12 +48,15 @@ export function init(container) {
     // Font Loading and Text Geometry
     const loader = new FontLoader();
     loader.load(
+        // Using a relative path or a more stable CDN might be better long-term
+        // For now, keeping the unpkg link as it was.
         'https://unpkg.com/three/examples/fonts/helvetiker_regular.typeface.json',
         (font) => {
-            const textGeometry = new THREE.TextGeometry(TEXT_TO_DISPLAY, {
+            // Use the imported TextGeometry directly
+            const textGeometry = new TextGeometry(TEXT_TO_DISPLAY, {
                 font: font,
                 size: 10, // Adjusted size for initial view
-                height: 1, // Adjusted height
+                depth: 1, // Renamed from 'height' in newer Three.js versions
                 curveSegments: 12,
                 bevelEnabled: true,
                 bevelThickness: 0.5, // Adjusted bevel

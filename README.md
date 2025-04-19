@@ -74,6 +74,7 @@ This project uses [Vitest](https://vitest.dev/) with `@vitest/browser` and Playw
     *   A `<canvas>` element is correctly added to the container.
     *   The `cleanup` function is returned and executes without errors.
     *   The `<canvas>` element is removed upon cleanup.
+*   **Limitations:** Vitest's browser mode currently does not support module mocking (`vi.mock`). Tests relying heavily on this feature (like `3d-text.test.js`) are excluded from the browser test suite (`vitest.workspace.js`) to avoid errors. These tests could potentially be run in Node.js mode if needed.
 *   **Visual Consistency:** While not automatically asserted in the current tests, components should strive for visual consistency where appropriate (e.g., using the standard dark background color `0x1a1a1a`). Verifying rendering details like specific colors, lighting, or model appearance typically requires visual regression testing tools, which are not currently implemented.
 
 ## Notes

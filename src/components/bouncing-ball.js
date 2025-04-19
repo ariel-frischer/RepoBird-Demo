@@ -1,11 +1,14 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'; // Import OrbitControls
 
 export function init(container) {
     let animationFrameId;
-    let scene, camera, renderer, clock;
+    let scene, camera, renderer, clock, controls; // Add controls variable
     let ball, floor;
     let velocity = new THREE.Vector3(0, 0, 0); // Initial velocity
     const gravity = new THREE.Vector3(0, -9.8, 0);
+    const raycaster = new THREE.Raycaster(); // Add Raycaster
+    const mouse = new THREE.Vector2();       // Add mouse vector
     const restitution = 0.8; // Bounciness
     const ballRadius = 0.5;
 
@@ -23,6 +26,11 @@ export function init(container) {
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.enabled = true; // Enable shadows
     container.appendChild(renderer.domElement);
+
+    // Controls
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; // Optional: makes camera movement smoother
+    controls.dampingFactor = 0.05;
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -83,6 +91,9 @@ export function init(container) {
             }
         }
 
+        // Update controls
+        controls.update(); // Required if enableDamping is true
+
         // Render the scene
         renderer.render(scene, camera);
     }
@@ -95,6 +106,28 @@ export function init(container) {
     }
     window.addEventListener('resize', onWindowResize);
 
+    // Handle mouse clicks
+    function onMouseDown(event) {
+        // Calculate mouse position in normalized device coordinates (-1 to +1)
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // Update the picking ray with the camera and mouse position
+        raycaster.setFromCamera(mouse, camera);
+
+        // Calculate objects intersecting the picking ray
+        const intersects = raycaster.intersectObject(ball); // Check only against the ball
+
+        if (intersects.length > 0) {
+            // Ball was clicked, give it an upward velocity
+            velocity.y = 5; // Adjust this value for desired bounce height
+            // Optional: Move the ball slightly up immediately to avoid getting stuck
+            ball.position.y = Math.max(ball.position.y, ballRadius + 0.01);
+        }
+    }
+    renderer.domElement.addEventListener('mousedown', onMouseDown);
+
 
     // Start animation
     animate();
@@ -105,6 +138,12 @@ export function init(container) {
             cancelAnimationFrame(animationFrameId);
         }
         window.removeEventListener('resize', onWindowResize);
+        renderer.domElement.removeEventListener('mousedown', onMouseDown); // Remove click listener
+
+        // Dispose controls
+        if (controls) {
+            controls.dispose();
+        }
 
         // Dispose Three.js objects
         scene.remove(ball);

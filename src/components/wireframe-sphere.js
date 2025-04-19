@@ -62,7 +62,7 @@ function animate() {
     animationFrameId = requestAnimationFrame(animate);
 
     if (sphere) {
-        sphere.rotation.y += 0.005; // Rotate the sphere
+        sphere.rotation.y += 0.001; // Slowed down rotation speed
     }
     if (controls) {
         controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true

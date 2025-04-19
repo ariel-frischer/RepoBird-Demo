@@ -7,7 +7,12 @@ export default defineWorkspace([
     test: { // NESTED CONFIG
       name: 'browser-tests',
       include: ['tests/**/*.test.js', 'src/components/**/*.test.js'],
-      exclude: ['src/components/car-viewer.test.js'], // Exclude the one running in JSDOM
+      // Exclude tests requiring module mocking (not supported in browser mode)
+      // or tests designed for JSDOM environment.
+      exclude: [
+          'src/components/car-viewer.test.js',
+          'src/components/3d-text.test.js' // Excluded due to vi.mock usage
+      ],
       environment: 'browser', // Explicitly use browser environment
       browser: {
         enabled: true,

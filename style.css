@@ -14,6 +14,9 @@ body {
 }
 
 header {
+    display: flex; /* Use flexbox for alignment */
+    align-items: center; /* Vertically center items */
+    justify-content: space-between; /* Push logo and right content apart */
     background-color: #222; /* Dark header */
     color: #f0f0f0; /* Light text */
     padding: 10px 20px;
@@ -21,9 +24,46 @@ header {
     flex-shrink: 0; /* Prevent header from shrinking */
 }
 
+/* Style the logo link */
+#repobird-logo-link {
+    margin-right: 15px; /* Add space between logo and title */
+    display: flex; /* Ensure image aligns correctly */
+    align-items: center;
+}
+
+#repobird-logo-link img {
+    vertical-align: middle; /* Helps alignment */
+}
+
+#header-right {
+    display: flex;
+    flex-direction: column; /* Stack title and button vertically */
+    align-items: flex-end; /* Align items to the right */
+    /* Removed h1 styling from here */
+}
+
 header h1 {
-    margin: 0;
+    flex-grow: 1; /* Allow title to take available space */
+    text-align: center; /* Center the text */
+    margin: 0 15px; /* Add some horizontal margin */
     font-size: 1.5em;
+    line-height: 1; /* Adjust line height if needed */
+}
+
+.github-button {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 0.8em;
+    color: #f0f0f0;
+    background-color: #444;
+    border: 1px solid #666;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background-color 0.2s;
+}
+
+.github-button:hover {
+    background-color: #555;
 }
 
 .container {
