@@ -5,6 +5,7 @@ console.log('Three.js version:', THREE.REVISION);
 const appContainer = document.getElementById('app-container');
 const sidebarContainer = document.getElementById('sidebar'); // Get the sidebar container
 const menuToggle = document.getElementById('menu-toggle'); // Get the menu toggle button
+const closeSidebarButton = document.getElementById('close-sidebar'); // Get the close sidebar button
 
 let currentCleanup = null; // To store the cleanup function of the active demo
 let activeListItem = null; // To track the currently active list item
@@ -95,6 +96,17 @@ function populateSidebar(demosData) {
         return;
     }
 
+    // Find existing close button or create one if needed (though it should exist from HTML)
+    let closeButton = sidebarContainer.querySelector('#close-sidebar');
+    if (!closeButton) {
+        console.warn('Close button not found in sidebar HTML, creating dynamically.');
+        closeButton = document.createElement('button');
+        closeButton.id = 'close-sidebar';
+        closeButton.setAttribute('aria-label', 'Close menu');
+        closeButton.innerHTML = '&times;'; // Use HTML entity for 'X'
+        sidebarContainer.prepend(closeButton); // Add it at the beginning
+    }
+
     const ul = document.createElement('ul');
     ul.id = 'demo-list'; // Add an ID for easier targeting
 
@@ -106,7 +118,7 @@ function populateSidebar(demosData) {
         ul.appendChild(li);
     });
 
-    // Add event listener using delegation
+    // Add event listener using delegation for demo links
     ul.addEventListener('click', (event) => {
         if (event.target && event.target.nodeName === 'LI') {
             const demoKey = event.target.dataset.demoKey;
@@ -120,12 +132,22 @@ function populateSidebar(demosData) {
                 activeListItem = event.target; // Update tracker
 
                 loadDemo(demoKey);
+
+                // Automatically close sidebar on mobile after selecting a demo
+                if (window.innerWidth <= 768) {
+                    sidebarContainer.classList.remove('sidebar-visible');
+                }
             }
         }
     });
 
-    sidebarContainer.innerHTML = ''; // Clear previous content
-    sidebarContainer.appendChild(ul);
+    // Clear previous content *except* the close button
+    const existingList = sidebarContainer.querySelector('#demo-list');
+    if (existingList) {
+        sidebarContainer.removeChild(existingList);
+    }
+    sidebarContainer.appendChild(ul); // Append the new list
+
     console.log('Sidebar populated with demos.');
 
     // Return the list element for potential initial load targeting
@@ -134,7 +156,7 @@ function populateSidebar(demosData) {
 
 // --- Initialization ---
 
-// 1. Populate the sidebar
+// 1. Populate the sidebar (this also ensures the close button exists)
 const demoListElement = populateSidebar(demos);
 
 // 2. Set the desired default demo
@@ -176,14 +198,38 @@ if (demos[defaultDemoKey] && demoListElement) {
 
 
 // --- Sidebar Toggle Logic ---
+
+// Hamburger Menu Toggle
 if (menuToggle && sidebarContainer) {
     menuToggle.addEventListener('click', () => {
         sidebarContainer.classList.toggle('sidebar-visible');
-        console.log('Sidebar toggled'); // Added for debugging
+        console.log('Sidebar toggled via hamburger');
     });
-    console.log('Sidebar toggle listener added.');
+    console.log('Hamburger toggle listener added.');
 } else {
     console.warn('Menu toggle button or sidebar container not found, toggle functionality disabled.');
 }
+
+// Close Button Toggle
+if (closeSidebarButton && sidebarContainer) {
+    closeSidebarButton.addEventListener('click', () => {
+        sidebarContainer.classList.remove('sidebar-visible');
+        console.log('Sidebar closed via close button');
+    });
+    console.log('Sidebar close button listener added.');
+} else {
+    // Attempt to find it again in case populateSidebar created it dynamically
+    const dynamicCloseButton = document.getElementById('close-sidebar');
+    if (dynamicCloseButton && sidebarContainer) {
+         dynamicCloseButton.addEventListener('click', () => {
+             sidebarContainer.classList.remove('sidebar-visible');
+             console.log('Sidebar closed via dynamically found close button');
+         });
+         console.log('Sidebar close button listener added (dynamically found).');
+    } else {
+        console.warn('Close sidebar button not found, close functionality disabled.');
+    }
+}
+
 
 console.log('Application initialized.');

@@ -84,6 +84,30 @@ header h1 {
     box-sizing: border-box; /* Include padding in width/height */
     /* Add transition for smooth slide-in/out */
     transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
+    position: relative; /* Needed for absolute positioning of close button */
+}
+
+#close-sidebar {
+    display: none; /* Hidden by default and on desktop */
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: #f0f0f0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    padding: 5px;
+    z-index: 10; /* Ensure it's above other sidebar content if needed */
+    transition: color 0.2s; /* Add transition for hover effect */
+}
+
+#close-sidebar:hover,
+#close-sidebar:focus {
+    color: #ffffff; /* Slightly brighter on hover/focus */
+    outline: none; /* Remove default focus outline if desired */
 }
 
 #sidebar h2 {
@@ -201,9 +225,15 @@ header h1 {
         transform: translateX(-100%); /* Hide off-screen to the left */
         width: 200px; /* Keep width consistent when shown */
         box-shadow: 2px 0 5px rgba(0,0,0,0.2); /* Add shadow for better separation */
-        padding-top: 60px; /* Add padding to clear the header potentially */
+        /* Removed padding-top to allow close button at very top */
+        /* padding-top: 60px; */
         box-sizing: border-box;
         /* Transition is handled by base style */
+    }
+
+    /* Show close button ONLY when sidebar is visible on mobile */
+    #sidebar.sidebar-visible #close-sidebar {
+        display: block;
     }
 
     #sidebar.sidebar-visible { /* State when sidebar should be visible */
