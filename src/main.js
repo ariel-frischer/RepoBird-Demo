@@ -137,26 +137,43 @@ function populateSidebar(demosData) {
 // 1. Populate the sidebar
 const demoListElement = populateSidebar(demos);
 
-// 2. Load the first demo by default
-const firstDemoKey = Object.keys(demos)[0];
-if (firstDemoKey && demoListElement) {
-    console.log(`Loading initial demo: ${firstDemoKey}`);
-    loadDemo(firstDemoKey);
+// 2. Set the desired default demo
+const defaultDemoKey = 'starfield';
+
+// 3. Load the default demo
+if (demos[defaultDemoKey] && demoListElement) {
+    console.log(`Loading initial demo: ${defaultDemoKey}`);
+    loadDemo(defaultDemoKey);
 
     // Find the corresponding list item and mark it as active
-    const firstLi = demoListElement.querySelector(`li[data-demo-key="${firstDemoKey}"]`);
-    if (firstLi) {
-        firstLi.classList.add('active');
-        activeListItem = firstLi;
+    const defaultLi = demoListElement.querySelector(`li[data-demo-key="${defaultDemoKey}"]`);
+    if (defaultLi) {
+        defaultLi.classList.add('active');
+        activeListItem = defaultLi;
+    } else {
+        console.warn(`Could not find sidebar item for default demo: ${defaultDemoKey}`);
     }
-} else if (!firstDemoKey) {
-     appContainer.innerHTML = '<p>No demos defined.</p>';
-     console.warn('No demos found in the demos object.');
+} else if (!demos[defaultDemoKey]) {
+    console.error(`Default demo key "${defaultDemoKey}" not found in demos object.`);
+    const firstDemoKey = Object.keys(demos)[0]; // Fallback to first demo if default is invalid
+    if (firstDemoKey && demoListElement) {
+        console.warn(`Falling back to loading first demo: ${firstDemoKey}`);
+        loadDemo(firstDemoKey);
+        const firstLi = demoListElement.querySelector(`li[data-demo-key="${firstDemoKey}"]`);
+        if (firstLi) {
+            firstLi.classList.add('active');
+            activeListItem = firstLi;
+        }
+    } else {
+        appContainer.innerHTML = '<p>No demos defined or sidebar error.</p>';
+        console.warn('No demos found or sidebar failed to populate.');
+    }
 } else {
     // This case should ideally not happen if sidebar was populated
     appContainer.innerHTML = '<p>Could not load initial demo.</p>';
     console.error('Failed to find the demo list element for initial load styling.');
 }
+
 
 // --- Sidebar Toggle Logic ---
 if (menuToggle && sidebarContainer) {

@@ -154,29 +154,37 @@ header h1 {
 /* --- Responsive Styles --- */
 @media (max-width: 768px) {
     header {
-        padding: 10px 15px; /* Slightly reduce padding */
-        /* Ensure toggle and title/logo are spaced */
-        justify-content: space-between;
+        padding: 8px 12px; /* Slightly reduce padding */
+        justify-content: space-between; /* Distribute space */
+        align-items: center; /* Vertically align */
     }
 
     header h1 {
-        font-size: 1.3em; /* Slightly smaller title */
-        margin: 0 10px; /* Adjust margin */
+        font-size: 1.2em; /* Smaller title */
+        margin: 0 8px; /* Add small margin around title */
+        flex-grow: 0; /* Prevent growing */
+        flex-shrink: 1; /* Allow shrinking */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         text-align: left; /* Align title left */
     }
 
     #repobird-logo-link {
-        margin-right: 10px; /* Adjust spacing */
+        margin-right: 0; /* Remove default margin */
+        /* No specific margin needed if h1 has margin */
     }
 
     #header-right {
-        /* Hide GitHub button or adjust layout if needed */
-        /* display: none; */
+        /* Contains GitHub link. Ensure it doesn't wrap or cause issues */
+        white-space: nowrap; /* Prevent button text wrapping */
+        margin-left: 8px; /* Add some space before the right content */
     }
 
     #menu-toggle {
         display: block; /* Show the button on mobile */
-        margin-right: 10px; /* Add some space between button and logo */
+        margin-right: 8px; /* Space between toggle and logo */
+        order: -1; /* Ensure toggle is first visually */
     }
 
     .container {
@@ -195,6 +203,7 @@ header h1 {
         box-shadow: 2px 0 5px rgba(0,0,0,0.2); /* Add shadow for better separation */
         padding-top: 60px; /* Add padding to clear the header potentially */
         box-sizing: border-box;
+        /* Transition is handled by base style */
     }
 
     #sidebar.sidebar-visible { /* State when sidebar should be visible */
@@ -204,5 +213,6 @@ header h1 {
     #app-container {
         margin-left: 0; /* Remove the margin typically occupied by sidebar */
         width: 100%; /* Ensure content takes full width */
+        /* Transition is handled by base style */
     }
 }
