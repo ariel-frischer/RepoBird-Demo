@@ -19,6 +19,7 @@ const demos = {
     'torus-knot': () => import('./components/torus-knot.js'),
     'interactive-plane': () => import('./components/interactive-plane.js'),
     'wireframe-sphere': () => import('./components/wireframe-sphere.js'), // Added wireframe sphere
+    'starfield': () => import('./components/starfield.js'),
 };
 
 async function loadDemo(demoKey) {
