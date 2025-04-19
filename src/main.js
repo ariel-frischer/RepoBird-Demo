@@ -19,7 +19,6 @@ const demos = {
     'solar-system': () => import('./components/solar-system.js'),
     'particle-emitter': () => import('./components/particle-emitter.js'),
     'torus-knot': () => import('./components/torus-knot.js'),
-    'interactive-plane': () => import('./components/interactive-plane.js'),
     'wireframe-sphere': () => import('./components/wireframe-sphere.js'), // Added wireframe sphere
     'starfield': () => import('./components/starfield.js'),
     'shape-morphing': () => import('./components/shape-morphing.js'),
