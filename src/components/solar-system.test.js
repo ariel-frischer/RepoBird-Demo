@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as THREE from 'three'; // Need THREE for instance checks
-import { init } from '../src/components/solar-system.js';
+import { init } from './solar-system.js'; // Corrected import path
 
 // Mock TextureLoader to prevent actual file loading attempts in tests
 // This might be needed if the browser environment can't access file paths easily
