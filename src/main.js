@@ -21,6 +21,7 @@ const demos = {
     'interactive-plane': () => import('./components/interactive-plane.js'),
     'wireframe-sphere': () => import('./components/wireframe-sphere.js'), // Added wireframe sphere
     'starfield': () => import('./components/starfield.js'),
+    'shape-morphing': () => import('./components/shape-morphing.js'),
 };
 
 async function loadDemo(demoKey) {
