@@ -203,7 +203,7 @@ function createRubiksCubeComponent() {
             if (x <= -offset + 0.1) materials[1].color.setHex(COLORS.ORANGE); // Left face
             if (y >= offset - 0.1) materials[2].color.setHex(COLORS.WHITE);   // Top face
             if (y <= -offset + 0.1) materials[3].color.setHex(COLORS.YELLOW); // Bottom face
-            if (z >= offset + 0.1) materials[4].color.setHex(COLORS.BLUE);    // Front face (fixed tolerance check)
+            if (z >= offset - 0.1) materials[4].color.setHex(COLORS.BLUE);    // Front face (fixed tolerance check)
             if (z <= -offset + 0.1) materials[5].color.setHex(COLORS.GREEN);  // Back face
 
             const geometry = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
