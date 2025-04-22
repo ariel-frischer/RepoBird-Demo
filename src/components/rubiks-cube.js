@@ -401,9 +401,9 @@ function createRubiksCubeComponent() {
                             mesh.userData.y = cubieData.y;
                             mesh.userData.z = cubieData.z;
 
-                            // Reset mesh rotation and scale relative to the parent cubeGroup (important!)
-                            mesh.rotation.set(0, 0, 0);
-                            mesh.scale.set(1, 1, 1);
+                            // ** REMOVED THESE LINES TO FIX ORIENTATION **
+                            // mesh.rotation.set(0, 0, 0);
+                            // mesh.scale.set(1, 1, 1);
                         });
 
                         scene.remove(pivotGroup);
