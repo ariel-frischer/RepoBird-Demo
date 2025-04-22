@@ -5,7 +5,7 @@ import TWEEN from '@tweenjs/tween.js';
 
 // Helper to get a simplified, sortable state representation
 function getLogicalState(cubies) {
-    return cubies.map(c => `${c.x},${c.y},${c.z}`).sort();
+    return cubies.map(c => `${c.x},${c.y},${c.z}`);
 }
 
 describe('Rubiks Cube Component Logic', () => {
