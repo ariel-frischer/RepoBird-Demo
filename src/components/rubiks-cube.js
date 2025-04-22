@@ -1,179 +1,572 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
-let scene, camera, renderer, controls, cubeGroup, animationFrameId;
+import { GUI } from 'lil-gui';
+import TWEEN from '@tweenjs/tween.js';
 
 // Standard Rubik's Cube face colors
-const WHITE = 0xffffff;
-const YELLOW = 0xffff00;
-const BLUE = 0x0000ff;
-const GREEN = 0x00ff00;
-const RED = 0xff0000;
-const ORANGE = 0xffa500;
-const BLACK = 0x111111; // For internal faces
+const COLORS = {
+    WHITE: 0xffffff,
+    YELLOW: 0xffff00,
+    BLUE: 0x0000ff,
+    GREEN: 0x00ff00,
+    RED: 0xff0000,
+    ORANGE: 0xffa500,
+    BLACK: 0x111111, // For internal faces
+    GRAY: 0x888888, // For neutral internal faces if needed
+};
 
-const cubieSize = 1;
-const spacing = 0.1;
-const totalCubieSize = cubieSize + spacing;
+const CUBIE_SIZE = 0.95; // Slightly smaller than 1 to create gaps
+const ROTATION_SPEED_MS = 300; // Speed for face rotation animation
+const SHUFFLE_DELAY_MS = 50; // Small delay between shuffle moves
 
-function createCubie(x, y, z) {
-    const materials = [
-        new THREE.MeshStandardMaterial({ color: BLACK }), // Right (+x)
-        new THREE.MeshStandardMaterial({ color: BLACK }), // Left (-x)
-        new THREE.MeshStandardMaterial({ color: BLACK }), // Top (+y)
-        new THREE.MeshStandardMaterial({ color: BLACK }), // Bottom (-y)
-        new THREE.MeshStandardMaterial({ color: BLACK }), // Front (+z)
-        new THREE.MeshStandardMaterial({ color: BLACK })  // Back (-z)
-    ];
+function createRubiksCubeComponent() {
+    let scene, camera, renderer, controls;
+    let cubeGroup, cubies = [];
+    let size = 3; // Default size
+    let animationFrameId;
+    let containerElement; // Store container reference
+    let isRotating = false; // Flag to prevent concurrent rotations
+    let shuffleSequence = []; // Store the sequence of shuffle moves
 
-    if (x === 1) materials[0].color.setHex(RED);
-    if (x === -1) materials[1].color.setHex(ORANGE);
-    if (y === 1) materials[2].color.setHex(WHITE);
-    if (y === -1) materials[3].color.setHex(YELLOW);
-    if (z === 1) materials[4].color.setHex(BLUE);
-    if (z === -1) materials[5].color.setHex(GREEN);
+    // --- UI related variables ---
+    let gui; // lil-gui instance
+    let sizeController = { size: size }; // Object for lil-gui binding
 
-    const geometry = new THREE.BoxGeometry(cubieSize, cubieSize, cubieSize);
-    const mesh = new THREE.Mesh(geometry, materials);
-    mesh.position.set(x * totalCubieSize, y * totalCubieSize, z * totalCubieSize);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return mesh;
-}
+    // Helper function for delays
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-function init(container) {
-    // Scene Setup
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a1a);
+    const component = {
+        init: function(container, initialSize = 3) {
+            containerElement = container; // Store container
+            size = initialSize;
+            sizeController.size = size; // Sync controller object
+            isRotating = false; // Reset rotation flag on init
+            shuffleSequence = []; // Reset shuffle sequence
 
-    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.set(0, 5, 5); // Adjusted camera position for better initial view
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-    container.appendChild(renderer.domElement);
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(size * 1.5, size * 1.5, size * 2); // Adjust camera based on size
+            camera.lookAt(0, 0, 0);
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Slightly brighter ambient
-    scene.add(ambientLight);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    directionalLight.position.set(5, 10, 7.5); // Adjusted light position
-    directionalLight.castShadow = true;
-    // Configure shadow properties if needed (e.g., map size)
-    directionalLight.shadow.mapSize.width = 1024;
-    directionalLight.shadow.mapSize.height = 1024;
-    scene.add(directionalLight);
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
 
-    // Rubik's Cube Model
-    cubeGroup = new THREE.Group();
-    for (let x = -1; x <= 1; x++) {
-        for (let y = -1; y <= 1; y++) {
-            for (let z = -1; z <= 1; z++) {
-                if (x === 0 && y === 0 && z === 0) {
-                    // Skip the center cubie (optional, but common)
-                    continue;
-                }
-                const cubie = createCubie(x, y, z);
-                cubeGroup.add(cubie);
-            }
-        }
-    }
-    scene.add(cubeGroup);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            directionalLight.position.set(size * 2, size * 3, size * 2.5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            scene.add(directionalLight);
 
-    // Plane for shadows (optional but looks better)
-    const planeGeometry = new THREE.PlaneGeometry(20, 20);
-    const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
-    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.y = - (1.5 * totalCubieSize + 0.5); // Position below the cube
-    plane.receiveShadow = true;
-    scene.add(plane);
+            // OrbitControls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.1;
+            controls.target.set(0, 0, 0);
+            controls.update();
 
+            // Cube Group
+            cubeGroup = new THREE.Group();
+            scene.add(cubeGroup);
 
-    // OrbitControls
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1; // Smoother damping
-    controls.target.set(0, 0, 0);
-    controls.update();
+            // Create the cube
+            this.createCube(size);
 
-    // Resize listener
-    const onWindowResize = () => {
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-    };
-    window.addEventListener('resize', onWindowResize);
+            // UI Controls (lil-gui)
+            gui = new GUI({ title: 'Rubik\'s Cube Controls' }); // Use backslash for escaping quote inside string
+            gui.domElement.style.position = 'absolute'; // Ensure it's positioned correctly if container is relative/absolute
+            gui.domElement.style.top = '10px';
+            gui.domElement.style.right = '10px';
+            containerElement.appendChild(gui.domElement); // Append GUI to the container
 
+            // Shuffle Button
+            gui.add(this, 'shuffle').name('Shuffle Cube');
 
-    // Animation Loop
-    function animate() {
-        animationFrameId = requestAnimationFrame(animate);
-        controls.update(); // required if controls.enableDamping or controls.autoRotate are set to true
-        renderer.render(scene, camera);
-    }
-    animate();
+            // Solve Button
+            gui.add(this, 'solve').name('Solve Cube');
 
-    // Return Cleanup Function
-    const cleanup = () => {
-        console.log("Cleaning up Rubik's Cube demo...");
-        cancelAnimationFrame(animationFrameId);
-        window.removeEventListener('resize', onWindowResize); // Remove resize listener
+            // Size Controller
+            gui.add(sizeController, 'size', 2, 5, 1) // Min 2, Max 5, Step 1
+                .name('Cube Size (N x N x N)')
+                .onChange(value => {
+                    this.changeSize(value);
+                });
 
-        if (controls) {
-            controls.dispose();
-        }
+            // Resize listener
+            window.addEventListener('resize', this.onWindowResize);
 
-        if (cubeGroup) {
-            cubeGroup.children.forEach(mesh => {
-                if (mesh.geometry) {
-                    mesh.geometry.dispose();
-                }
-                if (mesh.material) {
-                    if (Array.isArray(mesh.material)) {
-                        mesh.material.forEach(mat => mat.dispose());
-                    } else {
-                        mesh.material.dispose();
+            // Animation Loop
+            this.animate();
+
+            return this.cleanup; // Return cleanup function
+        },
+
+        createCube: function(newSize) {
+            // Note: This function now assumes the cube has been cleared before calling.
+            // It primarily focuses on building the new cube structure.
+            size = newSize; // Update the internal size state
+
+            const offset = (size - 1) / 2;
+
+            for (let x = -offset; x <= offset; x += 1) {
+                for (let y = -offset; y <= offset; y += 1) {
+                    for (let z = -offset; z <= offset; z += 1) {
+                        // Skip the center cubie for odd-sized cubes (purely internal)
+                        if (size % 2 !== 0 && x === 0 && y === 0 && z === 0) {
+                            continue;
+                        }
+                        // Skip internal cubies for even-sized cubes (no center piece)
+                        // Refined logic for even sized cubes to skip the inner 2x2x2... core
+                        if (size % 2 === 0 && Math.abs(x) < 0.5 && Math.abs(y) < 0.5 && Math.abs(z) < 0.5) {
+                             continue;
+                        }
+
+                        const cubieMesh = this.createCubie(x, y, z, size);
+                        cubeGroup.add(cubieMesh);
+                        cubies.push({
+                            mesh: cubieMesh,
+                            x: x,
+                            y: y,
+                            z: z
+                        });
                     }
                 }
-            });
-            scene.remove(cubeGroup);
-        }
-        
-        // Dispose other scene objects like lights and plane
-        scene.traverse(object => {
-             if (object.geometry) object.geometry.dispose();
-             if (object.material) {
-                if (Array.isArray(object.material)) {
-                    object.material.forEach(material => material.dispose());
-                } else {
-                    object.material.dispose();
+            }
+             // Adjust camera distance and controls target based on new size
+            this.adjustCameraAndControls(size);
+        },
+
+        createCubie: function(x, y, z, currentSize) {
+            const offset = (currentSize - 1) / 2;
+            const materials = [
+                new THREE.MeshStandardMaterial({ color: COLORS.BLACK }), // Right (+x) Index 0
+                new THREE.MeshStandardMaterial({ color: COLORS.BLACK }), // Left (-x)  Index 1
+                new THREE.MeshStandardMaterial({ color: COLORS.BLACK }), // Top (+y)   Index 2
+                new THREE.MeshStandardMaterial({ color: COLORS.BLACK }), // Bottom (-y)Index 3
+                new THREE.MeshStandardMaterial({ color: COLORS.BLACK }), // Front (+z) Index 4
+                new THREE.MeshStandardMaterial({ color: COLORS.BLACK })  // Back (-z)  Index 5
+            ];
+
+            // Assign face colors based on position
+            if (x >= offset - 0.1) materials[0].color.setHex(COLORS.RED);     // Right face (use tolerance for float issues)
+            if (x <= -offset + 0.1) materials[1].color.setHex(COLORS.ORANGE); // Left face
+            if (y >= offset - 0.1) materials[2].color.setHex(COLORS.WHITE);   // Top face
+            if (y <= -offset + 0.1) materials[3].color.setHex(COLORS.YELLOW); // Bottom face
+            if (z >= offset - 0.1) materials[4].color.setHex(COLORS.BLUE);    // Front face
+            if (z <= -offset + 0.1) materials[5].color.setHex(COLORS.GREEN);  // Back face
+
+            const geometry = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
+            const mesh = new THREE.Mesh(geometry, materials);
+            mesh.position.set(x, y, z); // Position based on logical coords
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            // Store logical position in userData for raycasting or identification
+            mesh.userData = { x, y, z, isCubie: true };
+
+            return mesh;
+        },
+
+        clearCube: function() {
+             if (cubeGroup) {
+                // Remove all children from the group and dispose them
+                while (cubeGroup.children.length > 0) {
+                    const mesh = cubeGroup.children[0];
+                    cubeGroup.remove(mesh);
+                    if (mesh.geometry) {
+                        mesh.geometry.dispose();
+                    }
+                    if (mesh.material) {
+                         if (Array.isArray(mesh.material)) {
+                            mesh.material.forEach(mat => mat.dispose());
+                        } else {
+                            mesh.material.dispose();
+                        }
+                    }
                 }
             }
-        });
+            cubies = []; // Reset the internal state array
+            shuffleSequence = []; // Clear shuffle sequence when cube changes
+        },
 
-
-        if (renderer) {
-            renderer.dispose();
-            if (renderer.domElement && container.contains(renderer.domElement)) {
-                 container.removeChild(renderer.domElement);
+        adjustCameraAndControls: function(currentSize) {
+             if (camera && controls) {
+                // Adjust camera Z position based on size (simple linear scaling)
+                camera.position.z = 5 + (currentSize - 3);
+                 // Adjust camera position slightly based on size to keep cube centered visually
+                camera.position.x = currentSize * 1.5;
+                camera.position.y = currentSize * 1.5;
+                camera.position.z = currentSize * 2;
+                // Ensure camera looks at the center (might be redundant if target is 0,0,0)
+                camera.lookAt(0, 0, 0);
+                // Ensure OrbitControls target is the center of the cube
+                controls.target.set(0, 0, 0);
+                controls.update(); // Apply changes
             }
-        }
+        },
 
-        // Clear references
-        scene = null;
-        camera = null;
-        renderer = null;
-        controls = null;
-        cubeGroup = null;
-        animationFrameId = null;
-        console.log("Rubik's Cube demo cleanup complete.");
+        animate: function() {
+            animationFrameId = requestAnimationFrame(this.animate.bind(this));
+            TWEEN.update(); // Update animations
+            if (controls) controls.update(); // Required for damping
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        },
+
+        onWindowResize: function() {
+            if (camera && renderer && containerElement) {
+                camera.aspect = containerElement.clientWidth / containerElement.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(containerElement.clientWidth, containerElement.clientHeight);
+            }
+        },
+
+        rotateFace: function(axis, layer, direction) {
+            // Returns a promise that resolves when the rotation animation completes
+            return new Promise((resolve, reject) => {
+                if (isRotating) {
+                    console.warn("Attempted to rotate while another rotation is in progress.");
+                    return reject("Rotation already in progress"); // Reject if already rotating
+                }
+                isRotating = true;
+
+                const offset = (size - 1) / 2;
+                // Validate layer based on size and offset
+                if (layer < -offset || layer > offset) {
+                    console.error(`Invalid layer ${layer} for size ${size}.`);
+                    isRotating = false;
+                    return reject(`Invalid layer ${layer}`); // Reject on invalid layer
+                }
+
+                const layerCubies = cubies.filter(cubie => {
+                    // Use logical coordinates stored in our cubies array
+                    // Use Math.round to handle potential floating point inaccuracies after rotations
+                    return Math.round(cubie[axis]) === layer;
+                });
+
+                if (layerCubies.length === 0) {
+                    isRotating = false;
+                    return resolve(); // Resolve immediately if no cubies found (no rotation needed)
+                }
+
+                const pivotGroup = new THREE.Group();
+                pivotGroup.name = "pivotGroup";
+                scene.add(pivotGroup); // Add pivot to the scene temporarily
+
+                // Move the cubies to the pivot group
+                layerCubies.forEach(cubieData => {
+                    cubeGroup.remove(cubieData.mesh); // Remove from main group
+                    pivotGroup.add(cubieData.mesh);   // Add to pivot group
+                });
+
+                const angle = (Math.PI / 2) * direction;
+                const rotationAxis = new THREE.Vector3(
+                    axis === 'x' ? 1 : 0,
+                    axis === 'y' ? 1 : 0,
+                    axis === 'z' ? 1 : 0
+                );
+
+                // Create the tween animation
+                new TWEEN.Tween(pivotGroup.rotation)
+                    .to({ [axis]: pivotGroup.rotation[axis] + angle }, ROTATION_SPEED_MS)
+                    .easing(TWEEN.Easing.Quadratic.InOut)
+                    .onComplete(() => {
+                        // Update logical state and move cubies back
+                        pivotGroup.updateMatrixWorld(); // Ensure world matrix is up-to-date
+
+                        layerCubies.forEach(cubieData => {
+                            const mesh = cubieData.mesh;
+                            mesh.applyMatrix4(pivotGroup.matrixWorld);
+                            pivotGroup.remove(mesh);
+                            cubeGroup.add(mesh);
+                            mesh.updateMatrixWorld();
+
+                            // Update internal logical coordinates based on the mesh's new world position
+                            cubieData.x = Math.round(mesh.position.x);
+                            cubieData.y = Math.round(mesh.position.y);
+                            cubieData.z = Math.round(mesh.position.z);
+
+                            // Also update the userData on the mesh itself
+                            mesh.userData.x = cubieData.x;
+                            mesh.userData.y = cubieData.y;
+                            mesh.userData.z = cubieData.z;
+                        });
+
+                        scene.remove(pivotGroup);
+                        isRotating = false; // Allow next rotation
+                        resolve(); // Resolve the promise when animation finishes
+                    })
+                    .start();
+            });
+        },
+
+        // Helper function to apply a move and handle waiting/animation
+        applyMove: async function(axis, layer, direction, storeInSequence = false) {
+            while (isRotating) {
+                // console.log("Move application waiting for rotation to finish...");
+                await delay(SHUFFLE_DELAY_MS / 2);
+            }
+
+            if (storeInSequence) {
+                 shuffleSequence.push({ axis, layer, direction });
+            }
+
+            // console.log(`Applying move: Axis ${axis}, Layer ${layer}, Dir ${direction}`);
+            try {
+                await this.rotateFace(axis, layer, direction);
+            } catch (error) {
+                console.error(`Error during move application (Axis: ${axis}, Layer: ${layer}, Dir: ${direction}):`, error);
+                throw error;
+            }
+        },
+
+        shuffle: async function() {
+            if (isRotating) {
+                console.warn("Cannot shuffle while a rotation is in progress.");
+                return;
+            }
+            console.log("Starting shuffle...");
+            shuffleSequence = []; // Clear previous shuffle sequence
+            const numMoves = size * 10; // Number of random moves
+            const axes = ['x', 'y', 'z'];
+            const directions = [-1, 1];
+            const layerOffset = (size - 1) / 2;
+
+            for (let i = 0; i < numMoves; i++) {
+                const axis = axes[Math.floor(Math.random() * axes.length)];
+                const layer = Math.floor(Math.random() * (2 * layerOffset + 1)) - layerOffset;
+                const direction = directions[Math.floor(Math.random() * directions.length)];
+
+                try {
+                    await this.applyMove(axis, layer, direction, true);
+                } catch (error) {
+                     console.error("Shuffle stopped due to error during move application.");
+                     break;
+                }
+            }
+            console.log("Shuffle complete.");
+        },
+
+        solve: async function() {
+            if (isRotating) {
+                console.warn("Cannot solve while a rotation is in progress.");
+                return;
+            }
+            if (!shuffleSequence || shuffleSequence.length === 0) {
+                console.log("Nothing to solve (no shuffle sequence recorded).");
+                return;
+            }
+
+            console.log("Starting solve...");
+            const movesToReverse = [...shuffleSequence];
+            let solveCompleted = true;
+
+            for (let i = movesToReverse.length - 1; i >= 0; i--) {
+                const move = movesToReverse[i];
+                try {
+                    await this.applyMove(move.axis, move.layer, -move.direction, false);
+                } catch (error) {
+                    console.error("Solve stopped due to error during move application.");
+                    solveCompleted = false;
+                    break;
+                }
+            }
+
+            if (solveCompleted) {
+                 console.log("Solve complete.");
+                 shuffleSequence = [];
+            } else {
+                 console.warn("Solve interrupted, shuffle sequence not cleared.");
+            }
+        },
+
+        changeSize: function(newSize) {
+            // 1. Input Validation
+            if (!Number.isInteger(newSize) || newSize < 2 || newSize > 5) { // Added max size check
+                console.error(`Invalid size requested: ${newSize}. Size must be an integer between 2 and 5.`);
+                // Revert UI if possible (lil-gui might do this automatically depending on how error is handled)
+                if (sizeController.size !== size) {
+                    sizeController.size = size;
+                    if(gui) {
+                         gui.controllers.forEach(c => {
+                            if (c.property === 'size') {
+                                c.updateDisplay();
+                            }
+                        });
+                    }
+                }
+                return;
+            }
+
+            // 2. Check if size is actually changing
+            if (newSize === size) {
+                console.log(`Cube is already size ${newSize}. No change needed.`);
+                return;
+            }
+
+            // 3. Check if a rotation is in progress
+            if (isRotating) {
+                console.warn("Cannot change size while a rotation is in progress.");
+                 // Revert UI controller value if change was triggered by UI
+                if (sizeController.size !== size) {
+                    sizeController.size = size;
+                    if(gui) {
+                         gui.controllers.forEach(c => {
+                            if (c.property === 'size') {
+                                c.updateDisplay();
+                            }
+                        });
+                    }
+                }
+                return; // Prevent size change during animation
+            }
+
+            console.log(`Changing size from ${size}x${size}x${size} to ${newSize}x${newSize}x${newSize}...`);
+
+            // 4. Cleanup Existing Cube Meshes and State
+            this.clearCube(); // This already removes meshes and clears cubies/shuffleSequence
+
+            // 5. Create New Cube
+            // Note: No need to update `this.size` here, `createCube` does it implicitly via `size = newSize`.
+            this.createCube(newSize); // This builds the new cube and adjusts camera/controls
+
+            // 6. Update internal state and potentially UI *after* cube creation succeeds
+            // `createCube` already sets `size = newSize`
+             // Update the controller object's value to match the new internal state
+            if (sizeController.size !== size) { // Check if the controller is out of sync (e.g., programmatic change)
+                sizeController.size = size;
+                // Find the controller and update its display value (if GUI exists)
+                if (gui) {
+                    gui.controllers.forEach(c => {
+                        if (c.property === 'size') {
+                            c.updateDisplay();
+                        }
+                    });
+                }
+            }
+
+
+            console.log(`Size change to ${newSize}x${newSize}x${newSize} complete.`);
+        },
+
+        cleanup: function() {
+            console.log("Cleaning up Rubik's Cube component...");
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            window.removeEventListener('resize', component.onWindowResize); // Use bound reference
+
+            if (gui) {
+                // Check if the GUI's DOM element exists and has a parent before trying to remove
+                if (gui.domElement && gui.domElement.parentElement) {
+                    try {
+                        gui.domElement.parentElement.removeChild(gui.domElement);
+                    } catch (e) {
+                        console.warn("Could not remove GUI DOM element during cleanup:", e);
+                    }
+                }
+                // Destroy the lil-gui instance itself to clean up its internal listeners etc.
+                gui.destroy();
+                gui = null;
+            }
+
+
+            if (controls) {
+                controls.dispose();
+                controls = null;
+            }
+
+            component.clearCube(); // Use component reference to clear meshes/state
+            if (scene && cubeGroup) {
+                 scene.remove(cubeGroup); // Remove the main group from the scene
+                 cubeGroup = null;
+            }
+
+
+            // Dispose scene resources
+             if (scene) {
+                const pivot = scene.getObjectByName("pivotGroup");
+                if (pivot) scene.remove(pivot);
+
+                scene.traverse(object => {
+                     if (object.geometry) object.geometry.dispose();
+                     if (object.material) {
+                        if (Array.isArray(object.material)) {
+                            object.material.forEach(material => material.dispose());
+                        } else if (object.material.dispose) {
+                             object.material.dispose();
+                        }
+                    }
+                });
+                scene = null;
+             }
+
+
+            if (renderer) {
+                renderer.dispose();
+                if (renderer.domElement && containerElement && containerElement.contains(renderer.domElement)) {
+                    try {
+                       containerElement.removeChild(renderer.domElement);
+                    } catch (e) {
+                        console.warn("Could not remove renderer DOM element during cleanup:", e);
+                    }
+                }
+                renderer = null;
+            }
+
+            camera = null;
+            // Reset internal state variables
+            cubies = [];
+            containerElement = null;
+            animationFrameId = null;
+            isRotating = false;
+            shuffleSequence = [];
+            sizeController = { size: 3 }; // Reset controller object
+            size = 3; // Reset internal size state
+            console.log("Rubik's Cube component cleanup complete.");
+        },
+
+        // --- Test Helper Method ---
+        // Expose internal state for testing purposes
+        getState: function() {
+            return {
+                size,
+                isRotating,
+                cubies: cubies.map(c => ({ x: c.x, y: c.y, z: c.z })), // Return copies of logical positions
+                shuffleSequence: [...shuffleSequence] // Return copy of sequence
+            };
+        }
     };
 
-    return cleanup;
+     // Bind methods that might lose context (event handlers, cleanup)
+    component.cleanup = component.cleanup.bind(component);
+    component.onWindowResize = component.onWindowResize.bind(component);
+    // Bind methods used directly by lil-gui
+    component.shuffle = component.shuffle.bind(component);
+    component.solve = component.solve.bind(component);
+    // changeSize is called via an arrow function in onChange, so binding isn't strictly necessary there,
+    // but binding it generally can prevent potential issues if called differently elsewhere.
+    component.changeSize = component.changeSize.bind(component);
+    component.getState = component.getState.bind(component);
+    component.applyMove = component.applyMove.bind(component); // Bind applyMove as it uses `this`
+
+
+    return component; // Return the component object
 }
 
-export { init };
+// Export a function that creates and returns the component instance
+function init(container, initialSize = 3) {
+    const rubiksCubeComponent = createRubiksCubeComponent();
+    // Return the cleanup function provided by the component's init method
+    return rubiksCubeComponent.init(container, initialSize);
+}
+
+// Export the creator function for testing and potentially direct use
+export { init, createRubiksCubeComponent };
