@@ -15,13 +15,14 @@ const demos = {
     'spinning-cube': () => import('./components/spinning-cube.js'),
     'bouncing-ball': () => import('./components/bouncing-ball.js'),
     '3d-text': () => import('./components/3d-text.js'),
-    'rubiks-cube': () => import('./components/rubiks-cube.js'),
+    'rubiks-cube': () => import('./components/rubiks-cube.js').then(module => module.createRubiksCubeComponent), // Updated import
     'solar-system': () => import('./components/solar-system.js'),
     'particle-emitter': () => import('./components/particle-emitter.js'),
     'torus-knot': () => import('./components/torus-knot.js'),
     'wireframe-sphere': () => import('./components/wireframe-sphere.js'), // Added wireframe sphere
     'starfield': () => import('./components/starfield.js'),
     'shape-morphing': () => import('./components/shape-morphing.js'),
+    // 'procedural-terrain': () => import('./components/procedural-terrain.js'), // Example if added later
 };
 
 async function loadDemo(demoKey) {
@@ -49,28 +50,51 @@ async function loadDemo(demoKey) {
     loadingMessage.textContent = `Loading ${formattedName}...`;
     appContainer.appendChild(loadingMessage);
 
+    let componentInstance = null; // Define outside try block for error handling scope
+
     // 5. Dynamically import and run the demo
     try {
         console.log(`Attempting to load demo: ${demoKey}`);
-        const demoModule = await demos[demoKey]();
+        const demoLoader = demos[demoKey]; // Get the loader function
+        const demoModuleOrFactory = await demoLoader(); // Execute the loader
 
-        // Clear loading message only after successful import
+        // Clear loading message only after successful import/load
         if (appContainer.contains(loadingMessage)) {
             appContainer.removeChild(loadingMessage);
         }
 
-        if (demoModule && typeof demoModule.init === 'function') {
-            console.log(`Initializing demo: ${demoKey}`);
+        // Check if it's the factory function from Rubik's Cube
+        if (demoKey === 'rubiks-cube' && typeof demoModuleOrFactory === 'function') {
+            console.log(`Creating Rubik's Cube component instance...`);
+            componentInstance = demoModuleOrFactory(); // Call the factory
+        } else if (demoModuleOrFactory && typeof demoModuleOrFactory.init === 'function') {
+            // Handle regular modules with an init function
+            componentInstance = demoModuleOrFactory;
+        } else {
+             console.error(`Error: Demo module/factory for "${demoKey}" is not in expected format.`);
+             appContainer.innerHTML = `<p>Error loading demo: ${formattedName}. Invalid format.</p>`;
+             return; // Exit early
+        }
+
+        // Now initialize the component instance
+        if (componentInstance && typeof componentInstance.init === 'function') {
+            console.log(`Initializing demo component: ${demoKey}`);
             // Pass the container and store the returned cleanup function
-            currentCleanup = demoModule.init(appContainer);
+            currentCleanup = componentInstance.init(appContainer);
             if (typeof currentCleanup !== 'function') {
-                console.warn(`Demo "${demoKey}" init function did not return a cleanup function.`);
+                console.warn(`Demo "${demoKey}" init function did not return a valid cleanup function.`);
                 currentCleanup = null; // Ensure it's null if not a function
             }
         } else {
-            console.error(`Error: Demo module "${demoKey}" does not have an init function.`);
-            appContainer.innerHTML = `<p>Error loading demo: ${formattedName}. Invalid format.</p>`;
+             console.error(`Error: Demo component instance for "${demoKey}" does not have an init function.`);
+             appContainer.innerHTML = `<p>Error loading demo: ${formattedName}. Failed to initialize.</p>`;
+             // Ensure potential partial cleanup if instance was created but init failed
+             if (componentInstance && typeof componentInstance.cleanup === 'function') {
+                 componentInstance.cleanup();
+             }
+             currentCleanup = null;
         }
+
     } catch (error) {
         console.error(`Error loading demo "${demoKey}":`, error);
         // Ensure loading message is removed on error too
@@ -86,6 +110,14 @@ async function loadDemo(demoKey) {
                  console.error("Error during cleanup after load error:", cleanupError);
              }
              currentCleanup = null;
+        }
+        // Also attempt cleanup if the component instance was created but failed during init
+        if (componentInstance && typeof componentInstance.cleanup === 'function') {
+             try {
+                 componentInstance.cleanup();
+             } catch (cleanupError) {
+                 console.error("Error during component instance cleanup after load error:", cleanupError);
+             }
         }
     }
 }

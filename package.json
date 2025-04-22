@@ -18,6 +18,10 @@
   ],
   "author": "",
   "license": "ISC",
+  "dependencies": {
+    "@tweenjs/tween.js": "^23.1.1",
+    "lil-gui": "^0.19.2"
+  },
   "devDependencies": {
     "@vitest/browser": "^1.5.0",
     "jsdom": "^24.0.0",
