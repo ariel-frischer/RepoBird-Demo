@@ -419,7 +419,7 @@ describe('Rubiks Cube Component Logic', () => {
             expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE);
         });
 
-        it('should solve the cube back to its initial state', async () => {
+        it('should solve the cube back to its initial state after one shuffle', async () => {
             // beforeEach initializes with testOptions
             const initialStateString = getLogicalState(componentInstance.getState().cubies).join('|');
             expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE);
@@ -444,6 +444,50 @@ describe('Rubiks Cube Component Logic', () => {
             expect(solvedStateString).toEqual(initialStateString);
             expect(shuffleSequenceAfterSolve.length).toBe(0);
             expect(finalState).toBe(CubeState.IDLE); // Should return to IDLE after solve
+        });
+
+        it('should return to solved state after multiple shuffles and a solve', async () => {
+            // beforeEach initializes with testOptions
+            const initialCubiesState = componentInstance.getState().cubies.map(c => ({
+                initialPosition: JSON.parse(JSON.stringify(c.mesh.userData.initialPosition)), // Deep copy initial
+                id: c.mesh.uuid // Use UUID as a unique identifier
+            }));
+            expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE);
+
+            // Shuffle twice
+            await componentInstance.shuffle();
+            const sequenceLengthAfterFirstShuffle = componentInstance.getState().shuffleSequence.length;
+            expect(sequenceLengthAfterFirstShuffle).toBeGreaterThan(0);
+            expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE); // Should return to IDLE after shuffle
+
+            await componentInstance.shuffle();
+            const sequenceLengthAfterSecondShuffle = componentInstance.getState().shuffleSequence.length;
+            // The sequence length should now be roughly double the first shuffle's length
+            expect(sequenceLengthAfterSecondShuffle).toBeGreaterThan(sequenceLengthAfterFirstShuffle);
+             // It should be exactly double if numMoves is constant and no errors occur (size 3 -> 30 moves per shuffle)
+            expect(sequenceLengthAfterSecondShuffle).toEqual(sequenceLengthAfterFirstShuffle * 2);
+            expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE); // Should return to IDLE
+
+            // Solve
+            await componentInstance.solve();
+
+            // Verify final state matches initial state
+            const finalCubies = componentInstance.getState().cubies;
+            const finalSequence = componentInstance.getState().shuffleSequence;
+            const finalCubeState = componentInstance.getState().currentCubeState;
+
+            expect(finalCubies.length).toEqual(initialCubiesState.length);
+
+            // Check each cubie's final logical position against its original initial position
+            finalCubies.forEach(finalCubie => {
+                // Find the corresponding initial data using the UUID
+                const initialData = initialCubiesState.find(ic => ic.id === finalCubie.mesh.uuid);
+                expect(initialData).toBeDefined(); // Ensure we found the corresponding initial data
+                expect(finalCubie.mesh.userData.logicalPosition).toEqual(initialData.initialPosition);
+            });
+
+            expect(finalSequence.length).toBe(0); // Sequence should be cleared after successful solve
+            expect(finalCubeState).toBe(CubeState.IDLE); // Should return to IDLE after solve
         });
 
          it('solve should do nothing if the cube was not shuffled', async () => {

@@ -492,7 +492,7 @@ function createRubiksCubeComponent() {
 
             console.log("Starting shuffle...");
             currentCubeState = CubeState.SHUFFLING; // Set state
-            shuffleSequence = []; // Clear previous shuffle sequence
+            // shuffleSequence = []; // REMOVED: Do not clear sequence here, accumulate moves
 
             try {
                 const numMoves = size * 10; // Number of random moves
