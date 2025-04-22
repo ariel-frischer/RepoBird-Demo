@@ -19,6 +19,8 @@ const CUBIE_SIZE = 0.95; // Slightly smaller than 1 to create gaps
 const ROTATION_SPEED_MS = 300; // Speed for face rotation animation
 const SHUFFLE_DELAY_MS = 50; // Small delay between shuffle moves
 
+let isTestEnvironment = false; // Flag to indicate test environment
+
 function createRubiksCubeComponent() {
     let scene, camera, renderer, controls;
     let cubeGroup, cubies = [];
@@ -36,12 +38,14 @@ function createRubiksCubeComponent() {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     const component = {
-        init: function(container, initialSize = 3) {
+        init: function(container, initialSize = 3, options = {}) { // Added options parameter
             containerElement = container; // Store container
             size = initialSize;
             sizeController.size = size; // Sync controller object
             isRotating = false; // Reset rotation flag on init
             shuffleSequence = []; // Reset shuffle sequence
+
+            isTestEnvironment = options.isTest === true; // Set the test environment flag
 
             // Scene Setup
             scene = new THREE.Scene();
@@ -82,25 +86,27 @@ function createRubiksCubeComponent() {
             // Create the cube
             this.createCube(size);
 
-            // UI Controls (lil-gui)
-            gui = new GUI({ title: 'Rubik\'s Cube Controls' }); // Use backslash for escaping quote inside string
-            gui.domElement.style.position = 'absolute'; // Ensure it's positioned correctly if container is relative/absolute
-            gui.domElement.style.top = '10px';
-            gui.domElement.style.right = '10px';
-            containerElement.appendChild(gui.domElement); // Append GUI to the container
+            // UI Controls (lil-gui) - Only add if not in test environment
+            if (!isTestEnvironment) {
+                gui = new GUI({ title: 'Rubik\'s Cube Controls' }); // Use backslash for escaping quote inside string
+                gui.domElement.style.position = 'absolute'; // Ensure it's positioned correctly if container is relative/absolute
+                gui.domElement.style.top = '10px';
+                gui.domElement.style.right = '10px';
+                containerElement.appendChild(gui.domElement); // Append GUI to the container
 
-            // Shuffle Button
-            gui.add(this, 'shuffle').name('Shuffle Cube');
+                // Shuffle Button
+                gui.add(this, 'shuffle').name('Shuffle Cube');
 
-            // Solve Button
-            gui.add(this, 'solve').name('Solve Cube');
+                // Solve Button
+                gui.add(this, 'solve').name('Solve Cube');
 
-            // Size Controller
-            gui.add(sizeController, 'size', 2, 5, 1) // Min 2, Max 5, Step 1
-                .name('Cube Size (N x N x N)')
-                .onChange(value => {
-                    this.changeSize(value);
-                });
+                // Size Controller
+                gui.add(sizeController, 'size', 2, 5, 1) // Min 2, Max 5, Step 1
+                    .name('Cube Size (N x N x N)')
+                    .onChange(value => {
+                        this.changeSize(value);
+                    });
+            }
 
             // Resize listener
             window.addEventListener('resize', this.onWindowResize);
@@ -126,9 +132,13 @@ function createRubiksCubeComponent() {
                             continue;
                         }
                         // Skip internal cubies for even-sized cubes (no center piece)
-                        // Refined logic for even sized cubes to skip the inner 2x2x2... core
-                        if (size % 2 === 0 && Math.abs(x) < 0.5 && Math.abs(y) < 0.5 && Math.abs(z) < 0.5) {
-                             continue;
+                        // Corrected logic for even sized cubes to skip the inner core
+                        const innerOffset = offset - 1; // Threshold for inner cubies in even sizes (e.g., 0.5 for size 4)
+                        if (size % 2 === 0 &&
+                            Math.abs(x) <= innerOffset &&
+                            Math.abs(y) <= innerOffset &&
+                            Math.abs(z) <= innerOffset) {
+                             continue; // Skip this inner cubie
                         }
 
                         const cubieMesh = this.createCubie(x, y, z, size);
@@ -279,9 +289,7 @@ function createRubiksCubeComponent() {
 
         rotateFace: function(axis, layer, direction) {
             // --- Test Environment Path ---
-             // Check if running in a test environment (e.g., using Node.js environment variable)
-            // Important: Ensure process.env.NODE_ENV is set to 'test' in your test setup
-            if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+            if (isTestEnvironment) { // Use the flag
                 if (isRotating) {
                     console.warn("Test Env: Attempted to rotate while another rotation is in progress.");
                     // In tests, we might want this to resolve quickly rather than reject
@@ -409,7 +417,7 @@ function createRubiksCubeComponent() {
         // Helper function to apply a move and handle waiting/animation
         applyMove: async function(axis, layer, direction, storeInSequence = false) {
              // In test environment, rotation is instant, so no need to wait
-             if (!(typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test')) {
+             if (!isTestEnvironment) { // Use the flag
                  while (isRotating) {
                      // console.log("Move application waiting for rotation to finish...");
                      await delay(SHUFFLE_DELAY_MS / 2);
@@ -426,14 +434,14 @@ function createRubiksCubeComponent() {
             } catch (error) {
                 console.error(`Error during move application (Axis: ${axis}, Layer: ${layer}, Dir: ${direction}):`, error);
                 // Don't rethrow if it was just a rotation in progress warning in test env
-                if (error !== "Rotation already in progress" || process.env.NODE_ENV !== 'test') {
+                if (error !== "Rotation already in progress" || !isTestEnvironment) { // Use the flag
                      throw error;
                 }
             }
         },
 
         shuffle: async function() {
-            if (isRotating && !(typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test')) {
+            if (isRotating && !isTestEnvironment) { // Use the flag
                 console.warn("Cannot shuffle while a rotation is in progress.");
                 return;
             }
@@ -453,7 +461,7 @@ function createRubiksCubeComponent() {
                     await this.applyMove(axis, layer, direction, true);
                     // Add a small delay even in tests to allow event loop to process if needed?
                     // Or maybe not, instantaneous might be better for testing speed.
-                    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test'){
+                    if (isTestEnvironment){ // Use the flag
                         // no delay in test
                     } else {
                          await delay(SHUFFLE_DELAY_MS); // Keep delay for visual shuffling
@@ -467,7 +475,7 @@ function createRubiksCubeComponent() {
         },
 
         solve: async function() {
-             if (isRotating && !(typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test')) {
+             if (isRotating && !isTestEnvironment) { // Use the flag
                 console.warn("Cannot solve while a rotation is in progress.");
                 return;
             }
@@ -484,7 +492,7 @@ function createRubiksCubeComponent() {
                 const move = movesToReverse[i];
                 try {
                     await this.applyMove(move.axis, move.layer, -move.direction, false);
-                     if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test'){
+                     if (isTestEnvironment){ // Use the flag
                         // no delay in test
                     } else {
                          await delay(SHUFFLE_DELAY_MS); // Keep delay for visual solving
@@ -529,7 +537,7 @@ function createRubiksCubeComponent() {
             }
 
             // 3. Check if a rotation is in progress (skip check in test env)
-            if (isRotating && !(typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test')) {
+            if (isRotating && !isTestEnvironment) { // Use the flag
                 console.warn("Cannot change size while a rotation is in progress.");
                  // Revert UI controller value if change was triggered by UI
                 if (sizeController.size !== size) {
@@ -648,6 +656,7 @@ function createRubiksCubeComponent() {
             shuffleSequence = [];
             sizeController = { size: 3 }; // Reset controller object
             size = 3; // Reset internal size state
+            isTestEnvironment = false; // Reset flag on cleanup
             console.log("Rubik's Cube component cleanup complete.");
         },
 
@@ -682,10 +691,11 @@ function createRubiksCubeComponent() {
 }
 
 // Export a function that creates and returns the component instance
-function init(container, initialSize = 3) {
+// Modified to pass options through
+function init(container, initialSize = 3, options = {}) {
     const rubiksCubeComponent = createRubiksCubeComponent();
     // Return the cleanup function provided by the component's init method
-    return rubiksCubeComponent.init(container, initialSize);
+    return rubiksCubeComponent.init(container, initialSize, options);
 }
 
 // Export the creator function for testing and potentially direct use
