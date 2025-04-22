@@ -16,6 +16,7 @@ const COLORS = {
 };
 
 const CUBIE_SIZE = 0.95; // Slightly smaller than 1 to create gaps
+const CUBIE_GAP = 1.0 - CUBIE_SIZE; // Gap between cubies
 const BASE_ROTATION_SPEED_MS = 300; // Base speed for face rotation animation
 const BASE_SHUFFLE_DELAY_MS = 50; // Base small delay between shuffle moves
 
@@ -36,9 +37,8 @@ function createRubiksCubeComponent() {
     let size = 3; // Default size
     let animationFrameId;
     let containerElement; // Store container reference
-    // let isRotating = false; // Flag to prevent concurrent rotations - REMOVED
     let currentCubeState = CubeState.IDLE; // Initialize state
-    let shuffleSequence = []; // Store the sequence of shuffle moves
+    let shuffleSequence = []; // Store the sequence of shuffle moves { axis, layerIndex, direction }
 
     // --- UI related variables ---
     let gui; // lil-gui instance
@@ -57,7 +57,6 @@ function createRubiksCubeComponent() {
             containerElement = container; // Store container
             size = initialSize;
             sizeController.size = size; // Sync controller object
-            // isRotating = false; // Reset rotation flag on init - REMOVED
             currentCubeState = CubeState.IDLE; // Reset state on init
             shuffleSequence = []; // Reset shuffle sequence
 
@@ -72,7 +71,7 @@ function createRubiksCubeComponent() {
             scene.background = new THREE.Color(0x1a1a1a);
 
             camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.set(size * 1.5, size * 1.5, size * 2); // Adjust camera based on size
+            // Camera position adjusted in createCube -> adjustCameraAndControls
             camera.lookAt(0, 0, 0);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -86,7 +85,7 @@ function createRubiksCubeComponent() {
             scene.add(ambientLight);
 
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-            directionalLight.position.set(size * 2, size * 3, size * 2.5);
+            // Light position adjusted dynamically based on size later
             directionalLight.castShadow = true;
             directionalLight.shadow.mapSize.width = 1024;
             directionalLight.shadow.mapSize.height = 1024;
@@ -96,7 +95,7 @@ function createRubiksCubeComponent() {
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.1;
-            controls.target.set(0, 0, 0);
+            controls.target.set(0, 0, 0); // Target set in adjustCameraAndControls
             controls.update();
 
             // Cube Group
@@ -104,11 +103,11 @@ function createRubiksCubeComponent() {
             scene.add(cubeGroup);
 
             // Create the cube
-            this.createCube(size);
+            this.createCube(size); // This also adjusts camera, controls, and light
 
             // UI Controls (lil-gui) - Only add if not in test environment
             if (!isTestEnvironment) {
-                gui = new GUI({ title: 'Rubik\'s Cube Controls' }); // Use backslash for escaping quote inside string
+                gui = new GUI({ title: "Rubik's Cube Controls" }); // Use double quotes to avoid escaping
                 gui.domElement.style.position = 'absolute'; // Ensure it's positioned correctly if container is relative/absolute
                 gui.domElement.style.top = '10px';
                 gui.domElement.style.right = '10px';
@@ -135,7 +134,6 @@ function createRubiksCubeComponent() {
                        // Recalculate dynamic speeds
                        ROTATION_SPEED_MS = BASE_ROTATION_SPEED_MS / animationSpeedFactor;
                        SHUFFLE_DELAY_MS = BASE_SHUFFLE_DELAY_MS / animationSpeedFactor;
-                       // console.log(`New speeds: Rotation=${ROTATION_SPEED_MS.toFixed(0)}ms, Shuffle Delay=${SHUFFLE_DELAY_MS.toFixed(0)}ms`);
                    });
             }
 
@@ -153,42 +151,44 @@ function createRubiksCubeComponent() {
             // It primarily focuses on building the new cube structure.
             size = newSize; // Update the internal size state
 
-            const offset = (size - 1) / 2;
+            const offset = (size - 1) / 2; // Float offset (e.g., 1.0 for 3x3, 1.5 for 4x4)
 
-            for (let x = -offset; x <= offset; x += 1) {
-                for (let y = -offset; y <= offset; y += 1) {
-                    for (let z = -offset; z <= offset; z += 1) {
+            for (let x_float = -offset; x_float <= offset; x_float += 1) {
+                for (let y_float = -offset; y_float <= offset; y_float += 1) {
+                    for (let z_float = -offset; z_float <= offset; z_float += 1) {
                         // Skip the center cubie for odd-sized cubes (purely internal)
-                        if (size % 2 !== 0 && x === 0 && y === 0 && z === 0) {
+                        if (size % 2 !== 0 && x_float === 0 && y_float === 0 && z_float === 0) {
                             continue;
                         }
                          // Correctly skip the inner core for even sizes
                          const innerBoundary = (size / 2) - 1; // e.g., for size 4, this is 1. Skip if abs(coord) <= 1 (i.e., is +/- 0.5)
                          if (size % 2 === 0 &&
-                             Math.abs(x) <= innerBoundary &&
-                             Math.abs(y) <= innerBoundary &&
-                             Math.abs(z) <= innerBoundary) {
+                             Math.abs(x_float) <= innerBoundary &&
+                             Math.abs(y_float) <= innerBoundary &&
+                             Math.abs(z_float) <= innerBoundary) {
                              continue; // Skip the 2x2x2 core for 4x4x4, etc.
                          }
 
-                        const cubieMesh = this.createCubie(x, y, z, size);
+                        const cubieMesh = this.createCubie(x_float, y_float, z_float, size);
                         cubeGroup.add(cubieMesh);
-                        cubies.push({
-                            mesh: cubieMesh,
-                            x: x, // Current logical x
-                            y: y, // Current logical y
-                            z: z  // Current logical z
-                            // initialPosition is now stored directly in mesh.userData
-                        });
+                        // Store mesh reference in cubies array (logical positions are now primarily in userData)
+                        cubies.push({ mesh: cubieMesh });
                     }
                 }
             }
-             // Adjust camera distance and controls target based on new size
-            this.adjustCameraAndControls(size);
+             // Adjust camera distance, controls target, and light based on new size
+            this.adjustCameraControlsAndLight(size);
         },
 
-        createCubie: function(x, y, z, currentSize) {
+        createCubie: function(x_float, y_float, z_float, currentSize) {
             const offset = (currentSize - 1) / 2;
+             // Integer coordinates: - (N-1) to +(N-1) in steps of 2
+             // E.g., N=3: -2, 0, 2
+             // E.g., N=4: -3, -1, 1, 3
+            const x_int = Math.round(x_float * 2);
+            const y_int = Math.round(y_float * 2);
+            const z_int = Math.round(z_float * 2);
+
             const materials = [
                 new THREE.MeshStandardMaterial({ color: COLORS.BLACK }), // Right (+x) Index 0
                 new THREE.MeshStandardMaterial({ color: COLORS.BLACK }), // Left (-x)  Index 1
@@ -198,24 +198,27 @@ function createRubiksCubeComponent() {
                 new THREE.MeshStandardMaterial({ color: COLORS.BLACK })  // Back (-z)  Index 5
             ];
 
-            // Assign face colors based on position
-            if (x >= offset - 0.1) materials[0].color.setHex(COLORS.RED);     // Right face (use tolerance for float issues)
-            if (x <= -offset + 0.1) materials[1].color.setHex(COLORS.ORANGE); // Left face
-            if (y >= offset - 0.1) materials[2].color.setHex(COLORS.WHITE);   // Top face
-            if (y <= -offset + 0.1) materials[3].color.setHex(COLORS.YELLOW); // Bottom face
-            if (z >= offset - 0.1) materials[4].color.setHex(COLORS.BLUE);    // Front face (fixed tolerance check)
-            if (z <= -offset + 0.1) materials[5].color.setHex(COLORS.GREEN);  // Back face
+            // Assign face colors based on position (using float offset for boundaries)
+            const tolerance = 0.1; // Tolerance for float boundary checks
+            if (x_float >= offset - tolerance) materials[0].color.setHex(COLORS.RED);     // Right face
+            if (x_float <= -offset + tolerance) materials[1].color.setHex(COLORS.ORANGE); // Left face
+            if (y_float >= offset - tolerance) materials[2].color.setHex(COLORS.WHITE);   // Top face
+            if (y_float <= -offset + tolerance) materials[3].color.setHex(COLORS.YELLOW); // Bottom face
+            if (z_float >= offset - tolerance) materials[4].color.setHex(COLORS.BLUE);    // Front face
+            if (z_float <= -offset + tolerance) materials[5].color.setHex(COLORS.GREEN);  // Back face
 
             const geometry = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
             const mesh = new THREE.Mesh(geometry, materials);
-            mesh.position.set(x, y, z); // Position based on logical coords
+            // Set visual position using float coordinates multiplied by spacing
+            mesh.position.set(x_float * (CUBIE_SIZE + CUBIE_GAP), y_float * (CUBIE_SIZE + CUBIE_GAP), z_float * (CUBIE_SIZE + CUBIE_GAP));
             mesh.castShadow = true;
             mesh.receiveShadow = true;
 
-            // Store logical and initial position in userData
+            // Store initial float pos, current float pos, and current integer pos in userData
             mesh.userData = {
-                logicalPosition: { x: x, y: y, z: z }, // Current logical position
-                initialPosition: { x: x, y: y, z: z }, // Initial position (won't change)
+                initialPosition: { x: x_float, y: y_float, z: z_float }, // Initial float position (won't change)
+                logicalPosition: { x: x_float, y: y_float, z: z_float }, // Current float logical position (updated for compatibility/debugging)
+                logicalPositionInt: { x: x_int, y: y_int, z: z_int }, // Current INTEGER logical position
                 isCubie: true
             };
 
@@ -244,19 +247,26 @@ function createRubiksCubeComponent() {
             shuffleSequence = []; // Clear shuffle sequence when cube changes
         },
 
-        adjustCameraAndControls: function(currentSize) {
-             if (camera && controls) {
-                // Adjust camera Z position based on size (simple linear scaling)
-                camera.position.z = 5 + (currentSize - 3);
-                 // Adjust camera position slightly based on size to keep cube centered visually
-                camera.position.x = currentSize * 1.5;
-                camera.position.y = currentSize * 1.5;
-                camera.position.z = currentSize * 2;
-                // Ensure camera looks at the center (might be redundant if target is 0,0,0)
-                camera.lookAt(0, 0, 0);
+        adjustCameraControlsAndLight: function(currentSize) {
+             if (camera && controls && scene) {
+                // Adjust camera position based on size
+                const camDistFactor = 1.8; // Factor to scale camera distance
+                camera.position.set(currentSize * camDistFactor, currentSize * camDistFactor, currentSize * camDistFactor * 1.2);
+                camera.lookAt(0, 0, 0); // Ensure camera looks at the center
+
                 // Ensure OrbitControls target is the center of the cube
                 controls.target.set(0, 0, 0);
                 controls.update(); // Apply changes
+
+                // Adjust directional light position based on size
+                const light = scene.getObjectByProperty('isDirectionalLight', true);
+                if (light) {
+                    light.position.set(currentSize * 2, currentSize * 3, currentSize * 2.5);
+                    // Optionally adjust shadow camera if needed
+                    // light.shadow.camera.left = -currentSize * 2;
+                    // light.shadow.camera.right = currentSize * 2;
+                    // ... etc.
+                }
             }
         },
 
@@ -275,13 +285,13 @@ function createRubiksCubeComponent() {
             }
         },
 
-        // --- Helper to update logical coordinates after a rotation ---
-        // This is primarily for the test environment path
-        _updateLogicalCoordinates: function(cubieData, axis, direction) {
-            const lp = cubieData.mesh.userData.logicalPosition;
-            let x = lp.x;
-            let y = lp.y;
-            let z = lp.z;
+        // --- Helper to update INTEGER logical coordinates after a rotation ---
+        // This is primarily for the test environment path where no animation occurs.
+        _updateLogicalCoordinatesInt: function(cubieData, axis, direction) {
+            const lpInt = cubieData.mesh.userData.logicalPositionInt;
+            let x = lpInt.x;
+            let y = lpInt.y;
+            let z = lpInt.z;
             let newX = x, newY = y, newZ = z;
 
             // Normalize direction to handle 180 degrees etc.
@@ -327,13 +337,11 @@ function createRubiksCubeComponent() {
                     // +90 CCW (stepDirection > 0): (z, y, -x)
                     // -90 CW  (stepDirection < 0): (-z, y, x)
                     if (stepDirection > 0) { // CCW
-                        newX = currentZ;  // Corrected based on RHR
-                        newY = currentY;
-                        newZ = -currentX; // Corrected based on RHR
+                        newX = currentZ;
+                        newZ = -currentX;
                     } else { // CW
-                        newX = -currentZ; // Corrected based on RHR
-                        newY = currentY;
-                        newZ = currentX;  // Corrected based on RHR
+                        newX = -currentZ;
+                        newZ = currentX;
                     }
                 } else if (axis === 'z') {
                     // Right-Hand Rule: Point thumb along +Z. Fingers curl X -> Y -> -X -> -Y
@@ -349,60 +357,62 @@ function createRubiksCubeComponent() {
                 }
             }
 
-            // Update the cubie's primary logical state (stored in the main cubies array)
-            cubieData.x = Math.round(newX * 10) / 10;
-            cubieData.y = Math.round(newY * 10) / 10;
-            cubieData.z = Math.round(newZ * 10) / 10;
+            // Update the INTEGER logical state on the mesh itself
+            if (cubieData.mesh && cubieData.mesh.userData && cubieData.mesh.userData.logicalPositionInt) {
+                cubieData.mesh.userData.logicalPositionInt.x = newX;
+                cubieData.mesh.userData.logicalPositionInt.y = newY;
+                cubieData.mesh.userData.logicalPositionInt.z = newZ;
 
-            // Also update the userData logicalPosition on the mesh itself
-            if (cubieData.mesh && cubieData.mesh.userData && cubieData.mesh.userData.logicalPosition) {
-                cubieData.mesh.userData.logicalPosition.x = cubieData.x;
-                cubieData.mesh.userData.logicalPosition.y = cubieData.y;
-                cubieData.mesh.userData.logicalPosition.z = cubieData.z;
+                // Also update the float logical position for compatibility/debugging (derived from int)
+                cubieData.mesh.userData.logicalPosition.x = newX / 2.0;
+                cubieData.mesh.userData.logicalPosition.y = newY / 2.0;
+                cubieData.mesh.userData.logicalPosition.z = newZ / 2.0;
+
+            } else {
+                 console.error("Missing userData or logicalPositionInt during _updateLogicalCoordinatesInt", cubieData.mesh);
             }
         },
 
-        // Updated rotateFace with state management
-        rotateFace: async function(axis, layer, direction, parentState = null) {
+        // rotateFace now expects an INTEGER layer coordinate
+        rotateFace: async function(axis, integerLayer, direction, parentState = null) {
             const targetState = parentState || CubeState.ROTATING;
             const finalState = parentState || CubeState.IDLE;
 
             // Allow rotation only if IDLE or if initiated by the correct parent process (shuffle/solve)
             if (currentCubeState !== CubeState.IDLE && currentCubeState !== parentState) {
-                console.warn(`Rotation blocked on [${axis}, ${layer}]: Cube state is ${currentCubeState}, expected IDLE or ${parentState}`);
-                // In test env, resolve immediately to avoid blocking test sequences.
-                // In normal env, reject to signal the blockage.
+                console.warn(`Rotation blocked on [${axis}, layerInt=${integerLayer}, dir=${direction}]: Cube state is ${currentCubeState}, expected IDLE or ${parentState}`);
                 return isTestEnvironment ? Promise.resolve() : Promise.reject(`Rotation Blocked: State is ${currentCubeState}`);
             }
             currentCubeState = targetState; // Set to ROTATING or the parent state (SHUFFLING/SOLVING)
 
-            const offset = (size - 1) / 2;
-            const tolerance = 0.1; // Increased tolerance for float comparisons
+            // --- REMOVED: Float layer validation and tolerance ---
+            // const offset = (size - 1) / 2;
+            // const tolerance = 0.1;
+            // if (layer < -offset - tolerance || layer > offset + tolerance) { ... }
 
-            // Validate layer (moved check after state lock)
-            if (layer < -offset - tolerance || layer > offset + tolerance) {
-                console.error(`Invalid layer ${layer} for size ${size}.`);
-                currentCubeState = finalState; // Reset state before rejecting
-                return Promise.reject(`Invalid layer ${layer}`);
-            }
+            // Filter cubies based on INTEGER logical position
+            const layerCubiesData = cubies.filter(cubieData => {
+                const posInt = cubieData.mesh?.userData?.logicalPositionInt;
+                // Ensure posInt exists and the axis matches the integerLayer
+                return posInt && posInt[axis] === integerLayer;
+            });
 
-            // Use the logical coordinates stored in the main cubies array for filtering
-            const layerCubies = cubies.filter(cubie => Math.abs(cubie[axis] - layer) < tolerance);
-
-            if (layerCubies.length === 0 && size > 1) {
-                console.warn(`${isTestEnvironment ? 'Test Env:' : 'Animation:'} No cubies found for layer ${layer} on axis ${axis} (Size ${size}).`);
+            if (layerCubiesData.length === 0 && size > 1) {
+                // This might happen legitimately for center layers on even cubes, but log anyway
+                console.warn(`${isTestEnvironment ? 'Test Env:' : 'Animation:'} No cubies found for integer layer ${integerLayer} on axis ${axis} (Size ${size}).`);
             }
 
             // If no cubies to rotate, reset state and resolve/return immediately
-            if (layerCubies.length === 0) {
+            if (layerCubiesData.length === 0) {
                 currentCubeState = finalState;
                 return Promise.resolve();
             }
 
             // --- Test Environment Path ---
             if (isTestEnvironment) {
-                layerCubies.forEach(cubieData => {
-                    this._updateLogicalCoordinates(cubieData, axis, direction);
+                layerCubiesData.forEach(cubieData => {
+                    // Call the INT version directly
+                    this._updateLogicalCoordinatesInt(cubieData, axis, direction);
                 });
                 currentCubeState = finalState; // Reset to IDLE or parent state
                 return Promise.resolve(); // Rotation is instantaneous
@@ -413,46 +423,58 @@ function createRubiksCubeComponent() {
             pivotGroup.name = "pivotGroup";
             scene.add(pivotGroup);
 
-            layerCubies.forEach(cubieData => {
-                cubeGroup.remove(cubieData.mesh);
-                pivotGroup.add(cubieData.mesh);
+            // Important: Use the mesh's world position before attaching to pivot
+            // This assumes the cubeGroup itself is at the origin (0,0,0)
+            layerCubiesData.forEach(cubieData => {
+                 const mesh = cubieData.mesh;
+                 // Convert mesh's world position to pivot's local space (which is world space initially)
+                 pivotGroup.attach(mesh); // Preserves world position
             });
+
 
             const angle = (Math.PI / 2) * direction;
 
-            return new Promise((resolve) => { // No reject needed here, handled by state check/layer validation earlier
+            return new Promise((resolve) => { // No reject needed here, handled by state check earlier
                 new TWEEN.Tween(pivotGroup.rotation)
                     .to({ [axis]: pivotGroup.rotation[axis] + angle }, ROTATION_SPEED_MS)
                     .easing(TWEEN.Easing.Quadratic.InOut)
                     .onComplete(() => {
-                        pivotGroup.updateMatrixWorld();
-                        layerCubies.forEach(cubieData => {
+                        pivotGroup.updateMatrixWorld(); // Ensure pivot matrix is up-to-date
+
+                        layerCubiesData.forEach(cubieData => {
                             const mesh = cubieData.mesh;
-                            mesh.applyMatrix4(pivotGroup.matrixWorld);
-                            pivotGroup.remove(mesh);
-                            cubeGroup.add(mesh);
-                            mesh.updateMatrixWorld();
+                            // Get world position *after* rotation within the pivot
+                            const worldPosition = new THREE.Vector3();
+                            mesh.getWorldPosition(worldPosition);
 
-                            // Update main logical coordinates
-                            cubieData.x = Math.round(mesh.position.x * 10) / 10;
-                            cubieData.y = Math.round(mesh.position.y * 10) / 10;
-                            cubieData.z = Math.round(mesh.position.z * 10) / 10;
+                             // Detach from pivot and re-attach to cubeGroup (main scene graph)
+                             // Use attach to preserve the new world position
+                            cubeGroup.attach(mesh);
 
-                            // Also update userData logicalPosition
-                            if (mesh.userData && mesh.userData.logicalPosition) {
-                                mesh.userData.logicalPosition.x = cubieData.x;
-                                mesh.userData.logicalPosition.y = cubieData.y;
-                                mesh.userData.logicalPosition.z = cubieData.z;
-                            } else if (mesh.userData) {
-                                // If logicalPosition wasn't there, create it
-                                mesh.userData.logicalPosition = { x: cubieData.x, y: cubieData.y, z: cubieData.z };
+                            // Update INTEGER logical position based on the *final mesh position*
+                            if (mesh.userData && mesh.userData.logicalPositionInt) {
+                                // Infer logical position from visual position
+                                // Divide by spacing (CUBIE_SIZE + CUBIE_GAP = 1.0) and convert to integer coords
+                                const newFloatX = mesh.position.x / (CUBIE_SIZE + CUBIE_GAP);
+                                const newFloatY = mesh.position.y / (CUBIE_SIZE + CUBIE_GAP);
+                                const newFloatZ = mesh.position.z / (CUBIE_SIZE + CUBIE_GAP);
+
+                                mesh.userData.logicalPositionInt.x = Math.round(newFloatX * 2);
+                                mesh.userData.logicalPositionInt.y = Math.round(newFloatY * 2);
+                                mesh.userData.logicalPositionInt.z = Math.round(newFloatZ * 2);
+
+                                // Also update the float logical position for compatibility/debugging
+                                mesh.userData.logicalPosition.x = newFloatX;
+                                mesh.userData.logicalPosition.y = newFloatY;
+                                mesh.userData.logicalPosition.z = newFloatZ;
                             } else {
-                                // If userData wasn't there, create it (less likely)
-                                mesh.userData = { logicalPosition: { x: cubieData.x, y: cubieData.y, z: cubieData.z } };
+                                console.error("Missing userData or logicalPositionInt during TWEEN update", mesh);
                             }
+                            // --- REMOVED: Direct call to _updateLogicalCoordinates ---
+                            // this._updateLogicalCoordinates(cubieData, axis, direction);
                         });
 
-                        scene.remove(pivotGroup);
+                        scene.remove(pivotGroup); // Clean up the pivot
                         currentCubeState = finalState; // Reset to IDLE or parent state
                         resolve(); // Resolve the promise when animation finishes
                     })
@@ -461,23 +483,28 @@ function createRubiksCubeComponent() {
             });
         },
 
-        // Helper function to apply a move, updated to pass parentState
-        applyMove: async function(axis, layer, direction, storeInSequence = false, parentState = null) {
-             // Removed the `while (isRotating)` loop, state check is now inside rotateFace
+        // Helper function to apply a move specification { axis, layerIndex, direction }
+        applyMove: async function(moveSpec, storeInSequence = false, parentState = null) {
+            const { axis, layerIndex, direction } = moveSpec;
+
+             // Calculate the INTEGER layer coordinate from the layerIndex
+             // Integer layers: -(N-1) to +(N-1) in steps of 2
+             // layerIndex: 0 to N-1
+            const integerLayer = -(size - 1) + (layerIndex * 2);
 
             if (storeInSequence) {
-                 shuffleSequence.push({ axis, layer, direction });
+                 shuffleSequence.push({ axis, layerIndex, direction }); // Store index, not calculated layer
             }
 
             try {
-                // Pass the parentState down to rotateFace
-                await this.rotateFace(axis, layer, direction, parentState);
+                // Pass the calculated INTEGER layer and parentState down to rotateFace
+                await this.rotateFace(axis, integerLayer, direction, parentState);
             } catch (error) {
                 // Log error but don't rethrow if it's just a state-blocking warning
                 if (typeof error === 'string' && error.startsWith('Rotation Blocked:')) {
                      console.warn(`Move application skipped: ${error}`);
                 } else {
-                    console.error(`Error during move application (Axis: ${axis}, Layer: ${layer}, Dir: ${direction}, Parent: ${parentState}):`, error);
+                    console.error(`Error during move application (Axis: ${axis}, LayerIndex: ${layerIndex} -> IntLayer: ${integerLayer}, Dir: ${direction}, Parent: ${parentState}):`, error);
                     throw error; // Rethrow actual errors
                 }
             }
@@ -492,33 +519,33 @@ function createRubiksCubeComponent() {
 
             console.log("Starting shuffle...");
             currentCubeState = CubeState.SHUFFLING; // Set state
-            // shuffleSequence = []; // REMOVED: Do not clear sequence here, accumulate moves
+            // shuffleSequence = []; // Keep accumulating sequence across multiple shuffles if desired
 
             try {
                 const numMoves = size * 10; // Number of random moves
                 const axes = ['x', 'y', 'z'];
-                const directions = [-1, 1];
-                const layerOffset = (size - 1) / 2;
+                const directions = [-1, 1]; // Clockwise (-1), Counter-Clockwise (1)
 
                 for (let i = 0; i < numMoves; i++) {
                     const axis = axes[Math.floor(Math.random() * axes.length)];
                     const layerIndex = Math.floor(Math.random() * size); // Index from 0 to size-1
-                    const layer = -layerOffset + layerIndex; // Logical coordinate
                     const direction = directions[Math.floor(Math.random() * directions.length)];
 
-                    // *** RE-ENABLED LOGGING FOR TEST ENV ***
+                    const moveSpec = { axis, layerIndex, direction };
+
                     if (isTestEnvironment) {
-                        console.log(`[Test Env] Shuffle Move ${i+1}/${numMoves}: axis=${axis}, layer=${layer.toFixed(1)}, direction=${direction}`);
+                        const integerLayer = -(size - 1) + (layerIndex * 2); // Calculate for logging
+                        console.log(`[Test Env] Shuffle Move ${i+1}/${numMoves}: spec=${JSON.stringify(moveSpec)}, calculatedIntLayer=${integerLayer}`);
                     }
 
-                    // Apply move, passing SHUFFLING state
-                    await this.applyMove(axis, layer, direction, true, CubeState.SHUFFLING);
+                    // Apply move using the moveSpec, passing SHUFFLING state
+                    await this.applyMove(moveSpec, true, CubeState.SHUFFLING);
 
                     if (!isTestEnvironment) {
                         // Use the DYNAMIC delay for visual shuffling
                         await delay(SHUFFLE_DELAY_MS);
                     }
-                     // Check if state changed unexpectedly (e.g., resize called mid-shuffle) - less critical now but good practice
+                     // Check if state changed unexpectedly
                      if (currentCubeState !== CubeState.SHUFFLING) {
                         console.warn("Shuffle interrupted by state change.");
                         break;
@@ -549,20 +576,26 @@ function createRubiksCubeComponent() {
 
             console.log("Starting solve...");
             currentCubeState = CubeState.SOLVING; // Set state
-            const movesToReverse = [...shuffleSequence];
+            const movesToReverse = [...shuffleSequence]; // Copy sequence
             let solveCompleted = true;
 
             try {
                 for (let i = movesToReverse.length - 1; i >= 0; i--) {
-                    const move = movesToReverse[i];
+                    const originalMove = movesToReverse[i];
+                    // Create the reversed move spec (same axis, same layerIndex, opposite direction)
+                    const reversedMoveSpec = {
+                        axis: originalMove.axis,
+                        layerIndex: originalMove.layerIndex,
+                        direction: -originalMove.direction
+                    };
 
-                     // *** RE-ENABLED LOGGING FOR TEST ENV ***
                     if (isTestEnvironment) {
-                        console.log(`[Test Env] Solve Move ${movesToReverse.length - i}/${movesToReverse.length}: axis=${move.axis}, layer=${move.layer.toFixed(1)}, direction=${-move.direction}`);
+                         const integerLayer = -(size - 1) + (reversedMoveSpec.layerIndex * 2); // Calculate for logging
+                        console.log(`[Test Env] Solve Move ${movesToReverse.length - i}/${movesToReverse.length}: reversedSpec=${JSON.stringify(reversedMoveSpec)}, calculatedIntLayer=${integerLayer}`);
                     }
 
-                    // Apply reversed move, passing SOLVING state
-                    await this.applyMove(move.axis, move.layer, -move.direction, false, CubeState.SOLVING);
+                    // Apply reversed move, passing SOLVING state, DO NOT store in sequence
+                    await this.applyMove(reversedMoveSpec, false, CubeState.SOLVING);
 
                     if (!isTestEnvironment) {
                         // Use the DYNAMIC delay for visual solving
@@ -598,7 +631,7 @@ function createRubiksCubeComponent() {
             // 1. Input Validation (unchanged)
             if (!Number.isInteger(newSize) || newSize < 2 || newSize > 5) {
                 console.error(`Invalid size requested: ${newSize}. Size must be an integer between 2 and 5.`);
-                if (sizeController.size !== size && gui) {
+                if (gui && sizeController.size !== size) {
                     sizeController.size = size;
                     gui.controllers.forEach(c => c.property === 'size' && c.updateDisplay());
                 }
@@ -615,7 +648,7 @@ function createRubiksCubeComponent() {
             if (currentCubeState !== CubeState.IDLE && !isTestEnvironment) {
                 console.warn(`Cannot change size: Cube state is ${currentCubeState}.`);
                 // Revert UI controller value if change was triggered by UI
-                if (sizeController.size !== size && gui) {
+                if (gui && sizeController.size !== size) {
                     sizeController.size = size;
                     gui.controllers.forEach(c => c.property === 'size' && c.updateDisplay());
                 }
@@ -630,7 +663,7 @@ function createRubiksCubeComponent() {
                 this.clearCube(); // This already removes meshes and clears cubies/shuffleSequence
 
                 // 5. Create New Cube
-                this.createCube(newSize); // This builds the new cube and adjusts camera/controls
+                this.createCube(newSize); // This builds the new cube and adjusts camera/controls/light
 
                 // 6. Update internal state and potentially UI *after* cube creation succeeds
                 // `createCube` already sets `size = newSize`
@@ -718,7 +751,6 @@ function createRubiksCubeComponent() {
             cubies = [];
             containerElement = null;
             animationFrameId = null;
-            // isRotating = false; // REMOVED
             currentCubeState = CubeState.IDLE; // Reset state
             shuffleSequence = [];
             sizeController = { size: 3 }; // Reset controller object
@@ -737,10 +769,10 @@ function createRubiksCubeComponent() {
             return {
                 size,
                 currentCubeState,
-                // Return the full cubie objects including mesh and its userData
-                // Tests will need to access mesh.userData for initial/logical positions
-                cubies: cubies, // Return the actual array (or a shallow copy if mutation is a concern)
-                shuffleSequence: [...shuffleSequence], // Return copy of sequence
+                // Return the cubies array containing objects with mesh references
+                // Tests will access mesh.userData for positions (float and int)
+                cubies: cubies,
+                shuffleSequence: [...shuffleSequence], // Return copy of sequence { axis, layerIndex, direction }
                 currentRotationSpeed: ROTATION_SPEED_MS,
                 currentShuffleDelay: SHUFFLE_DELAY_MS,
                 animationSpeedFactor: animationSpeedFactor
@@ -748,21 +780,21 @@ function createRubiksCubeComponent() {
         }
     };
 
-     // Bind methods that might lose context (event handlers, cleanup)
+     // Bind methods that might lose context
     component.cleanup = component.cleanup.bind(component);
     component.onWindowResize = component.onWindowResize.bind(component);
-    // Bind methods used directly by lil-gui or internally that rely on `this`
     component.shuffle = component.shuffle.bind(component);
     component.solve = component.solve.bind(component);
     component.changeSize = component.changeSize.bind(component);
     component.getState = component.getState.bind(component);
     component.applyMove = component.applyMove.bind(component);
-    component._updateLogicalCoordinates = component._updateLogicalCoordinates.bind(component);
+    component._updateLogicalCoordinatesInt = component._updateLogicalCoordinatesInt.bind(component); // Renamed
     component.rotateFace = component.rotateFace.bind(component);
-    component.createCube = component.createCube.bind(component); // Ensure this is bound if needed internally
-    component.clearCube = component.clearCube.bind(component); // Ensure this is bound
-    component.adjustCameraAndControls = component.adjustCameraAndControls.bind(component); // Ensure this is bound
-    component.animate = component.animate.bind(component); // Ensure animate is bound for requestAnimationFrame
+    component.createCube = component.createCube.bind(component);
+    component.createCubie = component.createCubie.bind(component); // Bind createCubie
+    component.clearCube = component.clearCube.bind(component);
+    component.adjustCameraControlsAndLight = component.adjustCameraControlsAndLight.bind(component); // Renamed
+    component.animate = component.animate.bind(component);
 
     return component; // Return the component object
 }
