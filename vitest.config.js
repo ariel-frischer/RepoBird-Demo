@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path'; // Import path module
 
 export default defineConfig({
   test: {
@@ -9,6 +10,14 @@ export default defineConfig({
       provider: 'playwright', // or 'webdriverio'
       // Optional: run tests in headless mode
       headless: true,
+      vite: { // Add this nested vite config block
+        server: {
+          fs: {
+            // Allow serving files from the project root directory
+            allow: [path.resolve(process.cwd())]
+          }
+        }
+      },
       // Optional: setup file for browser environment
       // setup: './tests/setup.js',
     },
