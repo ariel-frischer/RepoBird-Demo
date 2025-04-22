@@ -16,10 +16,19 @@ const COLORS = {
 };
 
 const CUBIE_SIZE = 0.95; // Slightly smaller than 1 to create gaps
-const ROTATION_SPEED_MS = 300; // Speed for face rotation animation
-const SHUFFLE_DELAY_MS = 50; // Small delay between shuffle moves
+const BASE_ROTATION_SPEED_MS = 300; // Base speed for face rotation animation
+const BASE_SHUFFLE_DELAY_MS = 50; // Base small delay between shuffle moves
 
 let isTestEnvironment = false; // Flag to indicate test environment
+
+// Define Cube State Enum
+const CubeState = {
+    IDLE: 'idle',
+    ROTATING: 'rotating', // For individual face rotations
+    SHUFFLING: 'shuffling',
+    SOLVING: 'solving',
+    RESIZING: 'resizing'
+};
 
 function createRubiksCubeComponent() {
     let scene, camera, renderer, controls;
@@ -27,12 +36,18 @@ function createRubiksCubeComponent() {
     let size = 3; // Default size
     let animationFrameId;
     let containerElement; // Store container reference
-    let isRotating = false; // Flag to prevent concurrent rotations
+    // let isRotating = false; // Flag to prevent concurrent rotations - REMOVED
+    let currentCubeState = CubeState.IDLE; // Initialize state
     let shuffleSequence = []; // Store the sequence of shuffle moves
 
     // --- UI related variables ---
     let gui; // lil-gui instance
     let sizeController = { size: size }; // Object for lil-gui binding
+
+    // --- Speed Control Variables ---
+    let animationSpeedFactor = 1.0; // Initial speed factor
+    let ROTATION_SPEED_MS; // Dynamic speed, calculated in init
+    let SHUFFLE_DELAY_MS; // Dynamic delay, calculated in init
 
     // Helper function for delays
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -42,10 +57,15 @@ function createRubiksCubeComponent() {
             containerElement = container; // Store container
             size = initialSize;
             sizeController.size = size; // Sync controller object
-            isRotating = false; // Reset rotation flag on init
+            // isRotating = false; // Reset rotation flag on init - REMOVED
+            currentCubeState = CubeState.IDLE; // Reset state on init
             shuffleSequence = []; // Reset shuffle sequence
 
             isTestEnvironment = options.isTest === true; // Set the test environment flag
+
+            // Calculate initial dynamic speeds
+            ROTATION_SPEED_MS = BASE_ROTATION_SPEED_MS / animationSpeedFactor;
+            SHUFFLE_DELAY_MS = BASE_SHUFFLE_DELAY_MS / animationSpeedFactor;
 
             // Scene Setup
             scene = new THREE.Scene();
@@ -106,6 +126,17 @@ function createRubiksCubeComponent() {
                     .onChange(value => {
                         this.changeSize(value);
                     });
+
+                // Speed Controller
+                gui.add({ animationSpeedFactor }, 'animationSpeedFactor', 0.1, 5.0, 0.1)
+                   .name('Animation Speed')
+                   .onChange(value => {
+                       animationSpeedFactor = value;
+                       // Recalculate dynamic speeds
+                       ROTATION_SPEED_MS = BASE_ROTATION_SPEED_MS / animationSpeedFactor;
+                       SHUFFLE_DELAY_MS = BASE_SHUFFLE_DELAY_MS / animationSpeedFactor;
+                       // console.log(`New speeds: Rotation=${ROTATION_SPEED_MS.toFixed(0)}ms, Shuffle Delay=${SHUFFLE_DELAY_MS.toFixed(0)}ms`);
+                   });
             }
 
             // Resize listener
@@ -131,23 +162,23 @@ function createRubiksCubeComponent() {
                         if (size % 2 !== 0 && x === 0 && y === 0 && z === 0) {
                             continue;
                         }
-                        // Skip internal cubies for even-sized cubes (no center piece)
-                        // Corrected logic for even sized cubes to skip the inner core
-                        const innerOffset = offset - 1; // Threshold for inner cubies in even sizes (e.g., 0.5 for size 4)
-                        if (size % 2 === 0 &&
-                            Math.abs(x) <= innerOffset &&
-                            Math.abs(y) <= innerOffset &&
-                            Math.abs(z) <= innerOffset) {
-                             continue; // Skip this inner cubie
-                        }
+                         // Correctly skip the inner core for even sizes
+                         const innerBoundary = (size / 2) - 1; // e.g., for size 4, this is 1. Skip if abs(coord) <= 1 (i.e., is +/- 0.5)
+                         if (size % 2 === 0 &&
+                             Math.abs(x) <= innerBoundary &&
+                             Math.abs(y) <= innerBoundary &&
+                             Math.abs(z) <= innerBoundary) {
+                             continue; // Skip the 2x2x2 core for 4x4x4, etc.
+                         }
 
                         const cubieMesh = this.createCubie(x, y, z, size);
                         cubeGroup.add(cubieMesh);
                         cubies.push({
                             mesh: cubieMesh,
-                            x: x,
-                            y: y,
-                            z: z
+                            x: x, // Current logical x
+                            y: y, // Current logical y
+                            z: z  // Current logical z
+                            // initialPosition is now stored directly in mesh.userData
                         });
                     }
                 }
@@ -172,7 +203,7 @@ function createRubiksCubeComponent() {
             if (x <= -offset + 0.1) materials[1].color.setHex(COLORS.ORANGE); // Left face
             if (y >= offset - 0.1) materials[2].color.setHex(COLORS.WHITE);   // Top face
             if (y <= -offset + 0.1) materials[3].color.setHex(COLORS.YELLOW); // Bottom face
-            if (z >= offset - 0.1) materials[4].color.setHex(COLORS.BLUE);    // Front face
+            if (z >= offset + 0.1) materials[4].color.setHex(COLORS.BLUE);    // Front face (fixed tolerance check)
             if (z <= -offset + 0.1) materials[5].color.setHex(COLORS.GREEN);  // Back face
 
             const geometry = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
@@ -181,8 +212,12 @@ function createRubiksCubeComponent() {
             mesh.castShadow = true;
             mesh.receiveShadow = true;
 
-            // Store logical position in userData for raycasting or identification
-            mesh.userData = { x, y, z, isCubie: true };
+            // Store logical and initial position in userData
+            mesh.userData = {
+                logicalPosition: { x: x, y: y, z: z }, // Current logical position
+                initialPosition: { x: x, y: y, z: z }, // Initial position (won't change)
+                isCubie: true
+            };
 
             return mesh;
         },
@@ -243,240 +278,268 @@ function createRubiksCubeComponent() {
         // --- Helper to update logical coordinates after a rotation ---
         // This is primarily for the test environment path
         _updateLogicalCoordinates: function(cubieData, axis, direction) {
-            const x = cubieData.x;
-            const y = cubieData.y;
-            const z = cubieData.z;
+            const lp = cubieData.mesh.userData.logicalPosition;
+            let x = lp.x;
+            let y = lp.y;
+            let z = lp.z;
             let newX = x, newY = y, newZ = z;
 
-            if (axis === 'x') { // Rotation around X
-                if (direction > 0) { // Clockwise (positive direction)
-                    newY = -z;
-                    newZ = y;
-                } else { // Counter-clockwise (negative direction)
-                    newY = z;
-                    newZ = -y;
-                }
-            } else if (axis === 'y') { // Rotation around Y
-                if (direction > 0) { // Clockwise
-                    newX = z;
-                    newZ = -x;
-                } else { // Counter-clockwise
-                    newX = -z;
-                    newZ = x;
-                }
-            } else if (axis === 'z') { // Rotation around Z
-                if (direction > 0) { // Clockwise
-                    newX = -y;
-                    newY = x;
-                } else { // Counter-clockwise
-                    newX = y;
-                    newY = -x;
+            // Normalize direction to handle 180 degrees etc.
+            // direction: +1 (CCW 90), -1 (CW 90), +2 (180), -2 (180)
+            // We treat +2 as two +1 steps, -2 as two -1 steps.
+            let numSteps = 0;
+            let stepDirection = 0;
+            if (direction === 1 || direction === -3) { // +90 CCW
+                numSteps = 1;
+                stepDirection = 1;
+            } else if (direction === -1 || direction === 3) { // -90 CW
+                numSteps = 1;
+                stepDirection = -1;
+            } else if (direction === 2 || direction === -2) { // 180
+                numSteps = 2;
+                stepDirection = Math.sign(direction) || 1; // Use sign, default to +1 (CCW steps)
+            } else if (direction === 0) {
+                 numSteps = 0;
+            } else {
+                console.warn(`Unhandled rotation direction: ${direction}. Treating as no rotation.`);
+                numSteps = 0;
+            }
+
+
+            for (let i = 0; i < numSteps; ++i) {
+                const currentX = newX;
+                const currentY = newY;
+                const currentZ = newZ;
+
+                if (axis === 'x') {
+                    // Right-Hand Rule: Point thumb along +X. Fingers curl Y -> Z -> -Y -> -Z
+                    // +90 CCW (stepDirection > 0): (x, -z, y)
+                    // -90 CW  (stepDirection < 0): (x, z, -y)
+                    if (stepDirection > 0) { // CCW
+                        newY = -currentZ;
+                        newZ = currentY;
+                    } else { // CW
+                        newY = currentZ;
+                        newZ = -currentY;
+                    }
+                } else if (axis === 'y') {
+                    // Right-Hand Rule: Point thumb along +Y. Fingers curl Z -> X -> -Z -> -X
+                    // +90 CCW (stepDirection > 0): (z, y, -x)
+                    // -90 CW  (stepDirection < 0): (-z, y, x)
+                    if (stepDirection > 0) { // CCW
+                        newX = currentZ;  // Corrected based on RHR
+                        newY = currentY;
+                        newZ = -currentX; // Corrected based on RHR
+                    } else { // CW
+                        newX = -currentZ; // Corrected based on RHR
+                        newY = currentY;
+                        newZ = currentX;  // Corrected based on RHR
+                    }
+                } else if (axis === 'z') {
+                    // Right-Hand Rule: Point thumb along +Z. Fingers curl X -> Y -> -X -> -Y
+                    // +90 CCW (stepDirection > 0): (-y, x, z)
+                    // -90 CW  (stepDirection < 0): (y, -x, z)
+                    if (stepDirection > 0) { // CCW
+                        newX = -currentY;
+                        newY = currentX;
+                    } else { // CW
+                        newX = currentY;
+                        newY = -currentX;
+                    }
                 }
             }
 
-            // Update the cubie's logical state
-            cubieData.x = Math.round(newX);
-            cubieData.y = Math.round(newY);
-            cubieData.z = Math.round(newZ);
+            // Update the cubie's primary logical state (stored in the main cubies array)
+            cubieData.x = Math.round(newX * 10) / 10;
+            cubieData.y = Math.round(newY * 10) / 10;
+            cubieData.z = Math.round(newZ * 10) / 10;
 
-            // Also update the userData on the mesh itself (if mesh exists)
-            if (cubieData.mesh && cubieData.mesh.userData) {
-                cubieData.mesh.userData.x = cubieData.x;
-                cubieData.mesh.userData.y = cubieData.y;
-                cubieData.mesh.userData.z = cubieData.z;
+            // Also update the userData logicalPosition on the mesh itself
+            if (cubieData.mesh && cubieData.mesh.userData && cubieData.mesh.userData.logicalPosition) {
+                cubieData.mesh.userData.logicalPosition.x = cubieData.x;
+                cubieData.mesh.userData.logicalPosition.y = cubieData.y;
+                cubieData.mesh.userData.logicalPosition.z = cubieData.z;
             }
         },
 
-        rotateFace: function(axis, layer, direction) {
+        // Updated rotateFace with state management
+        rotateFace: async function(axis, layer, direction, parentState = null) {
+            const targetState = parentState || CubeState.ROTATING;
+            const finalState = parentState || CubeState.IDLE;
+
+            // Allow rotation only if IDLE or if initiated by the correct parent process (shuffle/solve)
+            if (currentCubeState !== CubeState.IDLE && currentCubeState !== parentState) {
+                console.warn(`Rotation blocked on [${axis}, ${layer}]: Cube state is ${currentCubeState}, expected IDLE or ${parentState}`);
+                // In test env, resolve immediately to avoid blocking test sequences.
+                // In normal env, reject to signal the blockage.
+                return isTestEnvironment ? Promise.resolve() : Promise.reject(`Rotation Blocked: State is ${currentCubeState}`);
+            }
+            currentCubeState = targetState; // Set to ROTATING or the parent state (SHUFFLING/SOLVING)
+
+            const offset = (size - 1) / 2;
+            const tolerance = 0.1; // Increased tolerance for float comparisons
+
+            // Validate layer (moved check after state lock)
+            if (layer < -offset - tolerance || layer > offset + tolerance) {
+                console.error(`Invalid layer ${layer} for size ${size}.`);
+                currentCubeState = finalState; // Reset state before rejecting
+                return Promise.reject(`Invalid layer ${layer}`);
+            }
+
+            // Use the logical coordinates stored in the main cubies array for filtering
+            const layerCubies = cubies.filter(cubie => Math.abs(cubie[axis] - layer) < tolerance);
+
+            if (layerCubies.length === 0 && size > 1) {
+                console.warn(`${isTestEnvironment ? 'Test Env:' : 'Animation:'} No cubies found for layer ${layer} on axis ${axis} (Size ${size}).`);
+            }
+
+            // If no cubies to rotate, reset state and resolve/return immediately
+            if (layerCubies.length === 0) {
+                currentCubeState = finalState;
+                return Promise.resolve();
+            }
+
             // --- Test Environment Path ---
-            if (isTestEnvironment) { // Use the flag
-                if (isRotating) {
-                    console.warn("Test Env: Attempted to rotate while another rotation is in progress.");
-                    // In tests, we might want this to resolve quickly rather than reject
-                    // or potentially throw an error if the test logic shouldn't allow this.
-                    // For now, let's resolve to allow test sequences to proceed, but log a warning.
-                    return Promise.resolve();
-                }
-                isRotating = true;
-
-                const offset = (size - 1) / 2;
-                if (layer < -offset || layer > offset) {
-                    console.error(`Test Env: Invalid layer ${layer} for size ${size}.`);
-                    isRotating = false;
-                    // Maybe reject or throw in tests for invalid input?
-                    return Promise.reject(`Invalid layer ${layer}`);
-                }
-
-                const layerCubies = cubies.filter(cubie => {
-                    // Use logical coordinates stored in our cubies array
-                    return Math.round(cubie[axis]) === layer;
-                });
-
-                if (layerCubies.length === 0) {
-                    isRotating = false;
-                    return Promise.resolve(); // No rotation needed
-                }
-
-                // Directly update the logical state of the affected cubies
-                 layerCubies.forEach(cubieData => {
+            if (isTestEnvironment) {
+                layerCubies.forEach(cubieData => {
                     this._updateLogicalCoordinates(cubieData, axis, direction);
-                 });
-
-                // Rotation is considered instantaneous in tests
-                isRotating = false;
-                return Promise.resolve(); // Resolve immediately
+                });
+                currentCubeState = finalState; // Reset to IDLE or parent state
+                return Promise.resolve(); // Rotation is instantaneous
             }
 
             // --- Normal Browser/Animation Path ---
-            // Returns a promise that resolves when the rotation animation completes
-            return new Promise((resolve, reject) => {
-                if (isRotating) {
-                    console.warn("Attempted to rotate while another rotation is in progress.");
-                    return reject("Rotation already in progress"); // Reject if already rotating
-                }
-                isRotating = true;
+            const pivotGroup = new THREE.Group();
+            pivotGroup.name = "pivotGroup";
+            scene.add(pivotGroup);
 
-                const offset = (size - 1) / 2;
-                // Validate layer based on size and offset
-                if (layer < -offset || layer > offset) {
-                    console.error(`Invalid layer ${layer} for size ${size}.`);
-                    isRotating = false;
-                    return reject(`Invalid layer ${layer}`); // Reject on invalid layer
-                }
+            layerCubies.forEach(cubieData => {
+                cubeGroup.remove(cubieData.mesh);
+                pivotGroup.add(cubieData.mesh);
+            });
 
-                const layerCubies = cubies.filter(cubie => {
-                    // Use logical coordinates stored in our cubies array
-                    // Use Math.round to handle potential floating point inaccuracies after rotations
-                    return Math.round(cubie[axis]) === layer;
-                });
+            const angle = (Math.PI / 2) * direction;
 
-                if (layerCubies.length === 0) {
-                    isRotating = false;
-                    return resolve(); // Resolve immediately if no cubies found (no rotation needed)
-                }
-
-                const pivotGroup = new THREE.Group();
-                pivotGroup.name = "pivotGroup";
-                scene.add(pivotGroup); // Add pivot to the scene temporarily
-
-                // Move the cubies to the pivot group
-                layerCubies.forEach(cubieData => {
-                    cubeGroup.remove(cubieData.mesh); // Remove from main group
-                    pivotGroup.add(cubieData.mesh);   // Add to pivot group
-                });
-
-                const angle = (Math.PI / 2) * direction;
-                const rotationAxis = new THREE.Vector3(
-                    axis === 'x' ? 1 : 0,
-                    axis === 'y' ? 1 : 0,
-                    axis === 'z' ? 1 : 0
-                );
-
-                // Create the tween animation
+            return new Promise((resolve) => { // No reject needed here, handled by state check/layer validation earlier
                 new TWEEN.Tween(pivotGroup.rotation)
                     .to({ [axis]: pivotGroup.rotation[axis] + angle }, ROTATION_SPEED_MS)
                     .easing(TWEEN.Easing.Quadratic.InOut)
                     .onComplete(() => {
-                        // Update logical state and move cubies back
-                        pivotGroup.updateMatrixWorld(); // Ensure world matrix is up-to-date
-
+                        pivotGroup.updateMatrixWorld();
                         layerCubies.forEach(cubieData => {
                             const mesh = cubieData.mesh;
-                            // Apply the pivot's world transformation to the mesh
                             mesh.applyMatrix4(pivotGroup.matrixWorld);
-
-                            // Detach from pivot and reattach to the main cube group
                             pivotGroup.remove(mesh);
                             cubeGroup.add(mesh);
-                            mesh.updateMatrixWorld(); // Update mesh's world matrix after re-parenting
+                            mesh.updateMatrixWorld();
 
-                            // Update internal logical coordinates based on the mesh's new world position
-                            // Rounding is crucial here to avoid floating point errors accumulating
-                            cubieData.x = Math.round(mesh.position.x);
-                            cubieData.y = Math.round(mesh.position.y);
-                            cubieData.z = Math.round(mesh.position.z);
+                            // Update main logical coordinates
+                            cubieData.x = Math.round(mesh.position.x * 10) / 10;
+                            cubieData.y = Math.round(mesh.position.y * 10) / 10;
+                            cubieData.z = Math.round(mesh.position.z * 10) / 10;
 
-                            // Also update the userData on the mesh itself for consistency
-                            mesh.userData.x = cubieData.x;
-                            mesh.userData.y = cubieData.y;
-                            mesh.userData.z = cubieData.z;
-
-                            // ** REMOVED THESE LINES TO FIX ORIENTATION **
-                            // mesh.rotation.set(0, 0, 0);
-                            // mesh.scale.set(1, 1, 1);
+                            // Also update userData logicalPosition
+                            if (mesh.userData && mesh.userData.logicalPosition) {
+                                mesh.userData.logicalPosition.x = cubieData.x;
+                                mesh.userData.logicalPosition.y = cubieData.y;
+                                mesh.userData.logicalPosition.z = cubieData.z;
+                            } else if (mesh.userData) {
+                                // If logicalPosition wasn't there, create it
+                                mesh.userData.logicalPosition = { x: cubieData.x, y: cubieData.y, z: cubieData.z };
+                            } else {
+                                // If userData wasn't there, create it (less likely)
+                                mesh.userData = { logicalPosition: { x: cubieData.x, y: cubieData.y, z: cubieData.z } };
+                            }
                         });
 
                         scene.remove(pivotGroup);
-                        isRotating = false; // Allow next rotation
+                        currentCubeState = finalState; // Reset to IDLE or parent state
                         resolve(); // Resolve the promise when animation finishes
                     })
-                    .start();
+                    // Pass undefined if animation loop running, otherwise 0 to start it
+                    .start(animationFrameId !== null ? undefined : 0);
             });
         },
 
-        // Helper function to apply a move and handle waiting/animation
-        applyMove: async function(axis, layer, direction, storeInSequence = false) {
-             // In test environment, rotation is instant, so no need to wait
-             if (!isTestEnvironment) { // Use the flag
-                 while (isRotating) {
-                     // console.log("Move application waiting for rotation to finish...");
-                     await delay(SHUFFLE_DELAY_MS / 2);
-                 }
-             }
+        // Helper function to apply a move, updated to pass parentState
+        applyMove: async function(axis, layer, direction, storeInSequence = false, parentState = null) {
+             // Removed the `while (isRotating)` loop, state check is now inside rotateFace
 
             if (storeInSequence) {
                  shuffleSequence.push({ axis, layer, direction });
             }
 
-            // console.log(`Applying move: Axis ${axis}, Layer ${layer}, Dir ${direction}`);
             try {
-                await this.rotateFace(axis, layer, direction);
+                // Pass the parentState down to rotateFace
+                await this.rotateFace(axis, layer, direction, parentState);
             } catch (error) {
-                console.error(`Error during move application (Axis: ${axis}, Layer: ${layer}, Dir: ${direction}):`, error);
-                // Don't rethrow if it was just a rotation in progress warning in test env
-                if (error !== "Rotation already in progress" || !isTestEnvironment) { // Use the flag
-                     throw error;
+                // Log error but don't rethrow if it's just a state-blocking warning
+                if (typeof error === 'string' && error.startsWith('Rotation Blocked:')) {
+                     console.warn(`Move application skipped: ${error}`);
+                } else {
+                    console.error(`Error during move application (Axis: ${axis}, Layer: ${layer}, Dir: ${direction}, Parent: ${parentState}):`, error);
+                    throw error; // Rethrow actual errors
                 }
             }
         },
 
         shuffle: async function() {
-            if (isRotating && !isTestEnvironment) { // Use the flag
-                console.warn("Cannot shuffle while a rotation is in progress.");
+            // Check if cube is busy (not IDLE)
+            if (currentCubeState !== CubeState.IDLE) {
+                console.warn(`Cannot shuffle: Cube state is ${currentCubeState}.`);
                 return;
             }
+
             console.log("Starting shuffle...");
+            currentCubeState = CubeState.SHUFFLING; // Set state
             shuffleSequence = []; // Clear previous shuffle sequence
-            const numMoves = size * 10; // Number of random moves
-            const axes = ['x', 'y', 'z'];
-            const directions = [-1, 1];
-            const layerOffset = (size - 1) / 2;
 
-            for (let i = 0; i < numMoves; i++) {
-                const axis = axes[Math.floor(Math.random() * axes.length)];
-                const layer = Math.floor(Math.random() * (2 * layerOffset + 1)) - layerOffset;
-                const direction = directions[Math.floor(Math.random() * directions.length)];
+            try {
+                const numMoves = size * 10; // Number of random moves
+                const axes = ['x', 'y', 'z'];
+                const directions = [-1, 1];
+                const layerOffset = (size - 1) / 2;
 
-                try {
-                    await this.applyMove(axis, layer, direction, true);
-                    // Add a small delay even in tests to allow event loop to process if needed?
-                    // Or maybe not, instantaneous might be better for testing speed.
-                    if (isTestEnvironment){ // Use the flag
-                        // no delay in test
-                    } else {
-                         await delay(SHUFFLE_DELAY_MS); // Keep delay for visual shuffling
+                for (let i = 0; i < numMoves; i++) {
+                    const axis = axes[Math.floor(Math.random() * axes.length)];
+                    const layerIndex = Math.floor(Math.random() * size); // Index from 0 to size-1
+                    const layer = -layerOffset + layerIndex; // Logical coordinate
+                    const direction = directions[Math.floor(Math.random() * directions.length)];
+
+                    // *** RE-ENABLED LOGGING FOR TEST ENV ***
+                    if (isTestEnvironment) {
+                        console.log(`[Test Env] Shuffle Move ${i+1}/${numMoves}: axis=${axis}, layer=${layer.toFixed(1)}, direction=${direction}`);
                     }
-                } catch (error) {
-                     console.error("Shuffle stopped due to error during move application.");
-                     break;
+
+                    // Apply move, passing SHUFFLING state
+                    await this.applyMove(axis, layer, direction, true, CubeState.SHUFFLING);
+
+                    if (!isTestEnvironment) {
+                        // Use the DYNAMIC delay for visual shuffling
+                        await delay(SHUFFLE_DELAY_MS);
+                    }
+                     // Check if state changed unexpectedly (e.g., resize called mid-shuffle) - less critical now but good practice
+                     if (currentCubeState !== CubeState.SHUFFLING) {
+                        console.warn("Shuffle interrupted by state change.");
+                        break;
+                    }
                 }
+                 console.log("Shuffle potentially complete (check state).");
+
+            } catch (error) {
+                 console.error("Shuffle stopped due to error during move application:", error);
+                 // State will be reset in finally block
+            } finally {
+                // Ensure state is reset regardless of success or failure
+                console.log(`Shuffle finished, resetting state from ${currentCubeState} to IDLE.`);
+                currentCubeState = CubeState.IDLE;
             }
-            console.log("Shuffle complete.");
         },
 
         solve: async function() {
-             if (isRotating && !isTestEnvironment) { // Use the flag
-                console.warn("Cannot solve while a rotation is in progress.");
+            // Check if cube is busy (not IDLE)
+            if (currentCubeState !== CubeState.IDLE) {
+                console.warn(`Cannot solve: Cube state is ${currentCubeState}.`);
                 return;
             }
             if (!shuffleSequence || shuffleSequence.length === 0) {
@@ -485,100 +548,109 @@ function createRubiksCubeComponent() {
             }
 
             console.log("Starting solve...");
+            currentCubeState = CubeState.SOLVING; // Set state
             const movesToReverse = [...shuffleSequence];
             let solveCompleted = true;
 
-            for (let i = movesToReverse.length - 1; i >= 0; i--) {
-                const move = movesToReverse[i];
-                try {
-                    await this.applyMove(move.axis, move.layer, -move.direction, false);
-                     if (isTestEnvironment){ // Use the flag
-                        // no delay in test
-                    } else {
-                         await delay(SHUFFLE_DELAY_MS); // Keep delay for visual solving
-                    }
-                } catch (error) {
-                    console.error("Solve stopped due to error during move application.");
-                    solveCompleted = false;
-                    break;
-                }
-            }
+            try {
+                for (let i = movesToReverse.length - 1; i >= 0; i--) {
+                    const move = movesToReverse[i];
 
-            if (solveCompleted) {
-                 console.log("Solve complete.");
-                 shuffleSequence = [];
-            } else {
-                 console.warn("Solve interrupted, shuffle sequence not cleared.");
+                     // *** RE-ENABLED LOGGING FOR TEST ENV ***
+                    if (isTestEnvironment) {
+                        console.log(`[Test Env] Solve Move ${movesToReverse.length - i}/${movesToReverse.length}: axis=${move.axis}, layer=${move.layer.toFixed(1)}, direction=${-move.direction}`);
+                    }
+
+                    // Apply reversed move, passing SOLVING state
+                    await this.applyMove(move.axis, move.layer, -move.direction, false, CubeState.SOLVING);
+
+                    if (!isTestEnvironment) {
+                        // Use the DYNAMIC delay for visual solving
+                        await delay(SHUFFLE_DELAY_MS);
+                    }
+                     // Check if state changed unexpectedly
+                     if (currentCubeState !== CubeState.SOLVING) {
+                        console.warn("Solve interrupted by state change.");
+                        solveCompleted = false;
+                        break;
+                    }
+                }
+
+                if (solveCompleted) {
+                    console.log("Solve process completed.");
+                    shuffleSequence = []; // Clear sequence only on successful completion
+                } else {
+                    console.warn("Solve interrupted, shuffle sequence not cleared.");
+                }
+
+            } catch (error) {
+                console.error("Solve stopped due to error during move application:", error);
+                solveCompleted = false; // Mark as incomplete on error
+                 // State will be reset in finally block
+            } finally {
+                 // Ensure state is reset regardless of success or failure
+                 console.log(`Solve finished (Completed: ${solveCompleted}), resetting state from ${currentCubeState} to IDLE.`);
+                 currentCubeState = CubeState.IDLE;
             }
         },
 
         changeSize: function(newSize) {
-            // 1. Input Validation
-            if (!Number.isInteger(newSize) || newSize < 2 || newSize > 5) { // Added max size check
+            // 1. Input Validation (unchanged)
+            if (!Number.isInteger(newSize) || newSize < 2 || newSize > 5) {
                 console.error(`Invalid size requested: ${newSize}. Size must be an integer between 2 and 5.`);
-                // Revert UI if possible (lil-gui might do this automatically depending on how error is handled)
-                if (sizeController.size !== size) {
+                if (sizeController.size !== size && gui) {
                     sizeController.size = size;
-                    if(gui) {
-                         gui.controllers.forEach(c => {
-                            if (c.property === 'size') {
-                                c.updateDisplay();
-                            }
-                        });
-                    }
+                    gui.controllers.forEach(c => c.property === 'size' && c.updateDisplay());
                 }
                 return;
             }
 
-            // 2. Check if size is actually changing
+            // 2. Check if size is actually changing (unchanged)
             if (newSize === size) {
                 console.log(`Cube is already size ${newSize}. No change needed.`);
                 return;
             }
 
-            // 3. Check if a rotation is in progress (skip check in test env)
-            if (isRotating && !isTestEnvironment) { // Use the flag
-                console.warn("Cannot change size while a rotation is in progress.");
-                 // Revert UI controller value if change was triggered by UI
-                if (sizeController.size !== size) {
+            // 3. Check if cube is busy (not IDLE) - skip check in test env
+            if (currentCubeState !== CubeState.IDLE && !isTestEnvironment) {
+                console.warn(`Cannot change size: Cube state is ${currentCubeState}.`);
+                // Revert UI controller value if change was triggered by UI
+                if (sizeController.size !== size && gui) {
                     sizeController.size = size;
-                    if(gui) {
-                         gui.controllers.forEach(c => {
-                            if (c.property === 'size') {
-                                c.updateDisplay();
-                            }
-                        });
-                    }
+                    gui.controllers.forEach(c => c.property === 'size' && c.updateDisplay());
                 }
-                return; // Prevent size change during animation
+                return; // Prevent size change during other operations
             }
 
             console.log(`Changing size from ${size}x${size}x${size} to ${newSize}x${newSize}x${newSize}...`);
+            currentCubeState = CubeState.RESIZING; // Set state
 
-            // 4. Cleanup Existing Cube Meshes and State
-            this.clearCube(); // This already removes meshes and clears cubies/shuffleSequence
+            try {
+                // 4. Cleanup Existing Cube Meshes and State
+                this.clearCube(); // This already removes meshes and clears cubies/shuffleSequence
 
-            // 5. Create New Cube
-            // Note: No need to update `this.size` here, `createCube` does it implicitly via `size = newSize`.
-            this.createCube(newSize); // This builds the new cube and adjusts camera/controls
+                // 5. Create New Cube
+                this.createCube(newSize); // This builds the new cube and adjusts camera/controls
 
-            // 6. Update internal state and potentially UI *after* cube creation succeeds
-            // `createCube` already sets `size = newSize`
-             // Update the controller object's value to match the new internal state
-            if (sizeController.size !== size) { // Check if the controller is out of sync (e.g., programmatic change)
-                sizeController.size = size;
-                // Find the controller and update its display value (if GUI exists)
-                if (gui) {
-                    gui.controllers.forEach(c => {
-                        if (c.property === 'size') {
-                            c.updateDisplay();
-                        }
-                    });
+                // 6. Update internal state and potentially UI *after* cube creation succeeds
+                // `createCube` already sets `size = newSize`
+                if (sizeController.size !== size) { // Check if the controller is out of sync
+                    sizeController.size = size;
+                    if (gui) {
+                        gui.controllers.forEach(c => c.property === 'size' && c.updateDisplay());
+                    }
                 }
+                console.log(`Size change to ${newSize}x${newSize}x${newSize} complete.`);
+
+            } catch (error) {
+                 console.error("Error during size change:", error);
+                 // Attempt to revert size state if possible? Difficult.
+                 // State will be reset in finally block
+            } finally {
+                 // Ensure state is reset regardless of success or failure
+                 console.log(`Size change finished, resetting state from ${currentCubeState} to IDLE.`);
+                 currentCubeState = CubeState.IDLE;
             }
-
-
-            console.log(`Size change to ${newSize}x${newSize}x${newSize} complete.`);
         },
 
         cleanup: function() {
@@ -590,7 +662,6 @@ function createRubiksCubeComponent() {
             TWEEN.removeAll();
 
             if (gui) {
-                // Check if the GUI's DOM element exists and has a parent before trying to remove
                 if (gui.domElement && gui.domElement.parentElement) {
                     try {
                         gui.domElement.parentElement.removeChild(gui.domElement);
@@ -598,11 +669,9 @@ function createRubiksCubeComponent() {
                         console.warn("Could not remove GUI DOM element during cleanup:", e);
                     }
                 }
-                // Destroy the lil-gui instance itself to clean up its internal listeners etc.
                 gui.destroy();
                 gui = null;
             }
-
 
             if (controls) {
                 controls.dispose();
@@ -611,12 +680,10 @@ function createRubiksCubeComponent() {
 
             component.clearCube(); // Use component reference to clear meshes/state
             if (scene && cubeGroup) {
-                 scene.remove(cubeGroup); // Remove the main group from the scene
+                 scene.remove(cubeGroup);
                  cubeGroup = null;
             }
 
-
-            // Dispose scene resources
              if (scene) {
                 const pivot = scene.getObjectByName("pivotGroup");
                 if (pivot) scene.remove(pivot);
@@ -633,7 +700,6 @@ function createRubiksCubeComponent() {
                 });
                 scene = null;
              }
-
 
             if (renderer) {
                 renderer.dispose();
@@ -652,11 +718,16 @@ function createRubiksCubeComponent() {
             cubies = [];
             containerElement = null;
             animationFrameId = null;
-            isRotating = false;
+            // isRotating = false; // REMOVED
+            currentCubeState = CubeState.IDLE; // Reset state
             shuffleSequence = [];
             sizeController = { size: 3 }; // Reset controller object
             size = 3; // Reset internal size state
             isTestEnvironment = false; // Reset flag on cleanup
+             // Reset speed control variables
+            animationSpeedFactor = 1.0;
+            ROTATION_SPEED_MS = undefined; // Indicate they need recalculation on next init
+            SHUFFLE_DELAY_MS = undefined;
             console.log("Rubik's Cube component cleanup complete.");
         },
 
@@ -665,9 +736,14 @@ function createRubiksCubeComponent() {
         getState: function() {
             return {
                 size,
-                isRotating,
-                cubies: cubies.map(c => ({ x: c.x, y: c.y, z: c.z })), // Return copies of logical positions
-                shuffleSequence: [...shuffleSequence] // Return copy of sequence
+                currentCubeState,
+                // Return the full cubie objects including mesh and its userData
+                // Tests will need to access mesh.userData for initial/logical positions
+                cubies: cubies, // Return the actual array (or a shallow copy if mutation is a concern)
+                shuffleSequence: [...shuffleSequence], // Return copy of sequence
+                currentRotationSpeed: ROTATION_SPEED_MS,
+                currentShuffleDelay: SHUFFLE_DELAY_MS,
+                animationSpeedFactor: animationSpeedFactor
             };
         }
     };
@@ -675,17 +751,18 @@ function createRubiksCubeComponent() {
      // Bind methods that might lose context (event handlers, cleanup)
     component.cleanup = component.cleanup.bind(component);
     component.onWindowResize = component.onWindowResize.bind(component);
-    // Bind methods used directly by lil-gui
+    // Bind methods used directly by lil-gui or internally that rely on `this`
     component.shuffle = component.shuffle.bind(component);
     component.solve = component.solve.bind(component);
-    // changeSize is called via an arrow function in onChange, so binding isn't strictly necessary there,
-    // but binding it generally can prevent potential issues if called differently elsewhere.
     component.changeSize = component.changeSize.bind(component);
     component.getState = component.getState.bind(component);
-    component.applyMove = component.applyMove.bind(component); // Bind applyMove as it uses `this`
-    component._updateLogicalCoordinates = component._updateLogicalCoordinates.bind(component); // Bind helper
-    component.rotateFace = component.rotateFace.bind(component); // Bind rotateFace
-
+    component.applyMove = component.applyMove.bind(component);
+    component._updateLogicalCoordinates = component._updateLogicalCoordinates.bind(component);
+    component.rotateFace = component.rotateFace.bind(component);
+    component.createCube = component.createCube.bind(component); // Ensure this is bound if needed internally
+    component.clearCube = component.clearCube.bind(component); // Ensure this is bound
+    component.adjustCameraAndControls = component.adjustCameraAndControls.bind(component); // Ensure this is bound
+    component.animate = component.animate.bind(component); // Ensure animate is bound for requestAnimationFrame
 
     return component; // Return the component object
 }
