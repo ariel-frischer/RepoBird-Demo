@@ -22,6 +22,7 @@ const demos = {
     'wireframe-sphere': () => import('./components/wireframe-sphere.js'), // Added wireframe sphere
     'starfield': () => import('./components/starfield.js'),
     'shape-morphing': () => import('./components/shape-morphing.js'),
+    'boids-flocking': () => import('./components/boids-flocking.js'),
     // 'procedural-terrain': () => import('./components/procedural-terrain.js'), // Example if added later
 };
 
