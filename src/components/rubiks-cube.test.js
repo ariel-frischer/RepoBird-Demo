@@ -24,6 +24,28 @@ function getInitialIntPosition(x_float, y_float, z_float) {
     };
 }
 
+// Helper to get a map of cubie initial positions to their current INTEGER logical positions
+function getCubiePositionMap(cubies) {
+    const map = {};
+    cubies.forEach(c => {
+        const ip = c.mesh?.userData?.initialPosition; // Float initial position
+        const lpInt = c.mesh?.userData?.logicalPositionInt; // Integer logical position
+        if (ip && lpInt) {
+            // Create a stable key from the float initial position
+            const key = `${ip.x}|${ip.y}|${ip.z}`;
+            // Store a deep copy of the current logical integer position
+            map[key] = JSON.parse(JSON.stringify(lpInt));
+        } else {
+            // Handle cases where a cubie might be missing expected userData
+            console.warn("A cubie was missing initialPosition or logicalPositionInt in getCubiePositionMap");
+            const uuid = c.mesh?.uuid || 'unknown-uuid';
+             // Fallback key if initialPosition is missing, though this shouldn't happen in normal flow
+            map[`missing-data-${uuid}`] = null;
+        }
+    });
+    return map;
+}
+
 
 // Helper to find cubie by initial FLOAT position (remains unchanged)
 const findCubieByInitialPosition = (instance, x, y, z) => {
@@ -307,27 +329,29 @@ describe('Rubiks Cube Component Logic (Integer Coordinates)', () => {
 
     describe('Shuffle and Solve (Integer Coordinates)', { timeout: 5000 }, () => {
         it('should shuffle the cube and change its integer logical state', async () => {
-            // 1. Get initial FULL logical state
-            const initialFullLogicalState = getLogicalStateInt(componentInstance.getState().cubies);
+            // 1. Get initial state using the new map helper
+            const cubiesInitial = componentInstance.getState().cubies;
+            const mapBeforeShuffle = getCubiePositionMap(cubiesInitial);
 
             // 2. Perform shuffle
             await componentInstance.shuffle();
 
-            // 3. Get final FULL logical state
-            const finalFullLogicalState = getLogicalStateInt(componentInstance.getState().cubies);
+            // 3. Get final state using the new map helper
+            // componentInstance.getState().cubies will give the same array of cubie objects,
+            // but their internal logicalPositionInt properties will have been mutated by shuffle.
+            const cubiesAfterShuffle = componentInstance.getState().cubies;
+            const mapAfterShuffle = getCubiePositionMap(cubiesAfterShuffle);
 
-            // 4. Assert that the FULL integer logical state of the cube has changed
-            expect(finalFullLogicalState).not.toEqual(initialFullLogicalState);
+            // 4. Assert that the map of (initialPosition -> logicalPositionInt) has changed
+            expect(mapAfterShuffle).not.toEqual(mapBeforeShuffle);
 
-            // 5. Keep other checks
+            // 5. Keep other checks (unchanged)
             const shuffleSequence = componentInstance.getState().shuffleSequence;
             expect(shuffleSequence.length).toBeGreaterThan(0);
-            // Check sequence items structure { axis, layerIndex, direction }
             expect(shuffleSequence[0]).toHaveProperty('axis');
             expect(shuffleSequence[0]).toHaveProperty('layerIndex');
             expect(shuffleSequence[0]).toHaveProperty('direction');
-            expect(shuffleSequence[0]).not.toHaveProperty('layer'); // Ensure float layer is not stored
-
+            expect(shuffleSequence[0]).not.toHaveProperty('layer');
             expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE);
         });
 
@@ -342,19 +366,21 @@ describe('Rubiks Cube Component Logic (Integer Coordinates)', () => {
             const initialIntPosRef = getInitialIntPosition(initialFloatPosRef.x, initialFloatPosRef.y, initialFloatPosRef.z); // {x: -2, y: 2, z: 2}
             // --- End Verification Setup ---
 
+            // For verifying shuffle effectiveness (whole cube, new method)
+            const mapBeforeShuffle = getCubiePositionMap(componentInstance.getState().cubies); // ADDED
+
             await componentInstance.shuffle(); // Shuffle first
 
-            // Verify shuffle actually changed the state of at least one cubie (or the whole cube)
+            // Verify shuffle actually changed the state of at least one cubie (this check remains)
             const cubieDataAfterShuffle = findCubieByInitialPosition(componentInstance, initialFloatPosRef.x, initialFloatPosRef.y, initialFloatPosRef.z);
             expect(cubieDataAfterShuffle.mesh?.userData?.logicalPositionInt).not.toEqual(initialIntPosRef); // Check the specific cubie for change
-            // Also verify the whole cube state changed for robustness
-            const shuffledIntStateString = getLogicalStateInt(componentInstance.getState().cubies).join('|');
-            expect(shuffledIntStateString).not.toEqual(initialIntStateString);
-            // --- End Verification --
 
-
-            expect(componentInstance.getState().shuffleSequence.length).toBeGreaterThan(0);
-            expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE);
+            // Verify shuffle changed the overall cube state using the map helper (REPLACED LOGIC)
+            const mapAfterShuffle = getCubiePositionMap(componentInstance.getState().cubies); // ADDED
+            expect(mapAfterShuffle).not.toEqual(mapBeforeShuffle); // ADDED
+            
+            expect(componentInstance.getState().shuffleSequence.length).toBeGreaterThan(0); // This check remains
+            expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE); // This check remains
 
             await componentInstance.solve(); // Solve
 
