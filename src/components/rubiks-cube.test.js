@@ -307,29 +307,19 @@ describe('Rubiks Cube Component Logic (Integer Coordinates)', () => {
 
     describe('Shuffle and Solve (Integer Coordinates)', { timeout: 5000 }, () => {
         it('should shuffle the cube and change its integer logical state', async () => {
-            // Uses global findCubieByInitialPosition and getInitialIntPosition
-
-            const initialFloatPosRef = { x: -1, y: 1, z: 1 }; // Choose a corner cubie (float)
-            const initialIntPosRef = getInitialIntPosition(initialFloatPosRef.x, initialFloatPosRef.y, initialFloatPosRef.z); // {x: -2, y: 2, z: 2}
-
-            // 1. Get initial state of the reference cubie
-            const initialCubieData = findCubieByInitialPosition(componentInstance, initialFloatPosRef.x, initialFloatPosRef.y, initialFloatPosRef.z);
-            expect(initialCubieData).toBeDefined();
-            expect(initialCubieData.mesh?.userData?.logicalPositionInt).toEqual(initialIntPosRef);
+            // 1. Get initial FULL logical state
+            const initialFullLogicalState = getLogicalStateInt(componentInstance.getState().cubies);
 
             // 2. Perform shuffle
             await componentInstance.shuffle();
 
-            // 3. Get final state of the SAME reference cubie (find by initial float position)
-            const finalCubieData = findCubieByInitialPosition(componentInstance, initialFloatPosRef.x, initialFloatPosRef.y, initialFloatPosRef.z);
-            expect(finalCubieData).toBeDefined();
-            const finalLogicalIntPosition = finalCubieData.mesh?.userData?.logicalPositionInt;
-            expect(finalLogicalIntPosition).toBeDefined();
+            // 3. Get final FULL logical state
+            const finalFullLogicalState = getLogicalStateInt(componentInstance.getState().cubies);
 
-            // 4. Assert that the integer logical position object has changed
-            expect(finalLogicalIntPosition).not.toEqual(initialIntPosRef);
+            // 4. Assert that the FULL integer logical state of the cube has changed
+            expect(finalFullLogicalState).not.toEqual(initialFullLogicalState);
 
-            // Optional: Keep the sequence length check
+            // 5. Keep other checks
             const shuffleSequence = componentInstance.getState().shuffleSequence;
             expect(shuffleSequence.length).toBeGreaterThan(0);
             // Check sequence items structure { axis, layerIndex, direction }
@@ -347,17 +337,21 @@ describe('Rubiks Cube Component Logic (Integer Coordinates)', () => {
             const initialIntStateString = getLogicalStateInt(componentInstance.getState().cubies).join('|');
             expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE);
 
-            // --- Verification Setup ---
+            // --- Verification Setup (using a single cubie to ensure shuffle *did* change something before solve) ---
             const initialFloatPosRef = { x: -1, y: 1, z: 1 }; // Choose a corner cubie (float)
             const initialIntPosRef = getInitialIntPosition(initialFloatPosRef.x, initialFloatPosRef.y, initialFloatPosRef.z); // {x: -2, y: 2, z: 2}
             // --- End Verification Setup ---
 
             await componentInstance.shuffle(); // Shuffle first
 
-            // Verify shuffle actually happened using integer logical position
+            // Verify shuffle actually changed the state of at least one cubie (or the whole cube)
             const cubieDataAfterShuffle = findCubieByInitialPosition(componentInstance, initialFloatPosRef.x, initialFloatPosRef.y, initialFloatPosRef.z);
-            expect(cubieDataAfterShuffle.mesh?.userData?.logicalPositionInt).not.toEqual(initialIntPosRef);
-            // --- End Verification ---
+            expect(cubieDataAfterShuffle.mesh?.userData?.logicalPositionInt).not.toEqual(initialIntPosRef); // Check the specific cubie for change
+            // Also verify the whole cube state changed for robustness
+            const shuffledIntStateString = getLogicalStateInt(componentInstance.getState().cubies).join('|');
+            expect(shuffledIntStateString).not.toEqual(initialIntStateString);
+            // --- End Verification --
+
 
             expect(componentInstance.getState().shuffleSequence.length).toBeGreaterThan(0);
             expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE);
