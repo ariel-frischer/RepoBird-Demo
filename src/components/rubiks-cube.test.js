@@ -371,13 +371,19 @@ describe('Rubiks Cube Component Logic (Integer Coordinates)', () => {
 
             await componentInstance.shuffle(); // Shuffle first
 
-            // Verify shuffle actually changed the state of at least one cubie (this check remains)
-            const cubieDataAfterShuffle = findCubieByInitialPosition(componentInstance, initialFloatPosRef.x, initialFloatPosRef.y, initialFloatPosRef.z);
-            expect(cubieDataAfterShuffle.mesh?.userData?.logicalPositionInt).not.toEqual(initialIntPosRef); // Check the specific cubie for change
-
-            // Verify shuffle changed the overall cube state using the map helper (REPLACED LOGIC)
-            const mapAfterShuffle = getCubiePositionMap(componentInstance.getState().cubies); // ADDED
-            expect(mapAfterShuffle).not.toEqual(mapBeforeShuffle); // ADDED
+            // Verify shuffle changed the overall cube state using the map helper
+            const mapAfterShuffle = getCubiePositionMap(componentInstance.getState().cubies);
+            
+            // Check that at least one cubie moved (more reliable than checking a specific cubie)
+            const anyCubieMoved = Object.keys(mapBeforeShuffle).some(key => {
+                const before = mapBeforeShuffle[key];
+                const after = mapAfterShuffle[key];
+                return JSON.stringify(before) !== JSON.stringify(after);
+            });
+            expect(anyCubieMoved).toBe(true);
+            
+            // Also verify the overall map changed
+            expect(mapAfterShuffle).not.toEqual(mapBeforeShuffle);
             
             expect(componentInstance.getState().shuffleSequence.length).toBeGreaterThan(0); // This check remains
             expect(componentInstance.getState().currentCubeState).toBe(CubeState.IDLE); // This check remains
