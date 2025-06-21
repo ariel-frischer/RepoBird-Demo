@@ -23,7 +23,7 @@ const demos = {
     'starfield': () => import('./components/starfield.js'),
     'shape-morphing': () => import('./components/shape-morphing.js'),
     'boids-flocking': () => import('./components/boids-flocking.js'),
-    // 'procedural-terrain': () => import('./components/procedural-terrain.js'), // Example if added later
+    'procedural-terrain': () => import('./components/procedural-terrain.js'),
 };
 
 async function loadDemo(demoKey) {
